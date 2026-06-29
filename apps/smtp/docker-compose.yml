@@ -1,9 +1,9 @@
 services:
-  postfix:
+  smtp:
     image: boky/postfix:latest
     restart: unless-stopped
-    ports:
-      - "587:587"
+    expose:
+      - "587"
     environment:
       ALLOWED_SENDER_DOMAINS: takashiaihara.site
       RELAYHOST: "[smtp.resend.com]:587"
