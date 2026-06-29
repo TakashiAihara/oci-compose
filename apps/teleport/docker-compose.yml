@@ -9,7 +9,7 @@ services:
       - teleport-data:/var/lib/teleport
       - ./config/teleport.yaml:/etc/teleport.yaml:ro
       - /data/coolify/proxy/certs/certificates:/certs:ro
-    command: ["-c", "/etc/teleport.yaml"]
+    command: ["start", "-c", "/etc/teleport.yaml"]
     labels:
       - "traefik.enable=true"
       - "traefik.tcp.routers.teleport.rule=HostSNI(`teleport.takashiaihara.site`)"
