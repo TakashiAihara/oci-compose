@@ -11,8 +11,8 @@ services:
       - /data/coolify/proxy/certs/certificates:/certs:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.tcp.routers.teleport.rule=HostSNI(`*`)"
-      - "traefik.tcp.routers.teleport.entrypoints=teleport"
+      - "traefik.tcp.routers.teleport.rule=HostSNI(`teleport.takashiaihara.site`)"
+      - "traefik.tcp.routers.teleport.entrypoints=https"
       - "traefik.tcp.routers.teleport.tls.passthrough=true"
       - "traefik.tcp.services.teleport.loadbalancer.server.port=3080"
 
