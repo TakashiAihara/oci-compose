@@ -1,0 +1,18 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: n8n.takashiaihara.site
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.takashiaihara.site
+      GENERIC_TIMEZONE: Asia/Tokyo
+      N8N_RUNNERS_ENABLED: "true"
+    volumes:
+      - n8n-data:/home/node/.n8n
+
+volumes:
+  n8n-data:

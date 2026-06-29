@@ -1,0 +1,2 @@
+# config/ には旧 ConfigMap `homepage` の data (services.yaml, bookmarks.yaml, settings.yaml, widgets.yaml, docker.yaml, kubernetes.yaml, proxmox.yaml, custom.css, custom.js) を投入する。
+# 旧 dump: si1:/root/migration-backup-20260629/homepage/configmaps.yaml の data セクション参照。

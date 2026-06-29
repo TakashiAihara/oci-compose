@@ -1,0 +1,18 @@
+services:
+  postfix:
+    image: boky/postfix:latest
+    restart: unless-stopped
+    ports:
+      - "587:587"
+    environment:
+      ALLOWED_SENDER_DOMAINS: takashiaihara.site
+      RELAYHOST: "[smtp.resend.com]:587"
+      RELAYHOST_USERNAME: ${RELAYHOST_USERNAME:?set in Coolify env}
+      RELAYHOST_PASSWORD: ${RELAYHOST_PASSWORD:?set in Coolify env}
+      POSTFIX_smtp_tls_security_level: encrypt
+      HOSTNAME: smtp.takashiaihara.site
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/587 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

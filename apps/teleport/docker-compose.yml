@@ -1,0 +1,24 @@
+# teleport-cluster は Helm chart 前提で書かれていた (旧 oci-cluster/applications/teleport/values.yaml)。
+# Compose で運用する場合は公式 image `public.ecr.aws/gravitational/teleport-distroless` を使う。
+# clusterName と TLS だけ env で差し替え、 残りは config.yaml で書き起こす。
+#
+# 移行時の state restore:
+#   1. si1:~/migration-backup-20260629/teleport/pvc.tar.gz を展開
+#   2. 展開した /var/lib/teleport を ./data/teleport-data にコピー
+#   3. compose up で起動
+services:
+  teleport:
+    image: public.ecr.aws/gravitational/teleport-distroless:18.9.1
+    container_name: teleport
+    restart: unless-stopped
+    network_mode: host  # SSH gateway として外向き port 多重化 (443 multiplex)
+    volumes:
+      - teleport-data:/var/lib/teleport
+      - ./config/teleport.yaml:/etc/teleport.yaml:ro
+      - /etc/letsencrypt/live/teleport.takashiaihara.site:/var/lib/teleport/tls:ro
+    command:
+      - "-c"
+      - "/etc/teleport.yaml"
+
+volumes:
+  teleport-data:

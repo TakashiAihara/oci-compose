@@ -1,0 +1,22 @@
+services:
+  changedetection:
+    image: ghcr.io/dgtlmoon/changedetection.io:latest
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      BASE_URL: https://changedetection.takashiaihara.site
+      PLAYWRIGHT_DRIVER_URL: ws://playwright:3000
+    volumes:
+      - changedetection-data:/datastore
+    depends_on:
+      - playwright
+
+  playwright:
+    image: dgtlmoon/sockpuppetbrowser:latest
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
+
+volumes:
+  changedetection-data:

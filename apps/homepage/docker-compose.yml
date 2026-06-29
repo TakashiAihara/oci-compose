@@ -1,0 +1,11 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v1.13.1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: homepage.takashiaihara.site
+    volumes:
+      - ./config:/app/config
+      - ./icons:/app/public/icons

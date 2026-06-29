@@ -1,0 +1,31 @@
+# Teleport standalone config — Helm chart values.yaml 由来
+# 旧 chart: teleport-cluster 18.9.1, proxyListenerMode: multiplex, chartMode: standalone
+version: v3
+teleport:
+  data_dir: /var/lib/teleport
+  log:
+    severity: INFO
+    output: stdout
+
+auth_service:
+  enabled: true
+  cluster_name: teleport.takashiaihara.site
+  authentication:
+    type: local
+    second_factors:
+      - webauthn
+      - otp
+    webauthn:
+      rp_id: teleport.takashiaihara.site
+
+proxy_service:
+  enabled: true
+  public_addr: teleport.takashiaihara.site:443
+  https_keypairs:
+    - key_file: /var/lib/teleport/tls/privkey.pem
+      cert_file: /var/lib/teleport/tls/fullchain.pem
+  proxy_listener_mode: multiplex
+  web_listen_addr: 0.0.0.0:443
+
+ssh_service:
+  enabled: false  # 自分自身 (proxy host) は SSH gateway として登録しない方針

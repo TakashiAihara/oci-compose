@@ -1,0 +1,12 @@
+# tinyproxy: HTTP proxy。各 OCI instance の public IP を ssh outbound 用に貸すために si1/si2/si3 全 host で動かす。
+# si1 (主機) は Coolify 配下、 si2/si3 (1 GB keeper) はホスト直の `docker compose up -d`。
+services:
+  tinyproxy:
+    image: vimagick/tinyproxy:latest
+    container_name: tinyproxy
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    # ALLOWED_CLIENT は自宅 LAN / 外出先 IP / VPN 範囲に絞ること (default は全許可で公開しない方針)
+    environment:
+      ALLOWED_CLIENT: "0.0.0.0/0"  # 暫定: 後で絞る (Coolify env で上書き)

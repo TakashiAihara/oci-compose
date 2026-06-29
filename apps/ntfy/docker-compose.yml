@@ -1,0 +1,24 @@
+services:
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "8080:80"
+    environment:
+      NTFY_BASE_URL: https://ntfy.takashiaihara.site
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_ATTACHMENT_CACHE_DIR: /var/lib/ntfy/attachments
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+    volumes:
+      - ntfy-auth:/var/lib/ntfy/auth
+      - ntfy-cache:/var/cache/ntfy
+      - ntfy-attachments:/var/lib/ntfy/attachments
+      - ./config:/etc/ntfy
+
+volumes:
+  ntfy-auth:
+  ntfy-cache:
+  ntfy-attachments:
