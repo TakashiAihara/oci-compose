@@ -7,9 +7,8 @@ services:
       - "3080"
     volumes:
       - teleport-data:/var/lib/teleport
-      - ./config/teleport.yaml:/etc/teleport.yaml:ro
+      - ./config/teleport.yaml:/etc/teleport/teleport.yaml:ro
       - /data/coolify/proxy/certs/certificates:/certs:ro
-    command: ["start", "-c", "/etc/teleport.yaml"]
     labels:
       - "traefik.enable=true"
       - "traefik.tcp.routers.teleport.rule=HostSNI(`teleport.takashiaihara.site`)"
