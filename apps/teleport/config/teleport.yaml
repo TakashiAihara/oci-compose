@@ -9,6 +9,7 @@ teleport:
 auth_service:
   enabled: true
   cluster_name: teleport.takashiaihara.site
+  proxy_listener_mode: multiplex
   authentication:
     type: local
     second_factors:
@@ -23,7 +24,6 @@ proxy_service:
   https_keypairs:
     - key_file: /certs/_.takashiaihara.site.key
       cert_file: /certs/_.takashiaihara.site.crt
-  proxy_listener_mode: multiplex
   web_listen_addr: 0.0.0.0:3080
 
 ssh_service:
