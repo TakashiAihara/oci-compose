@@ -8,6 +8,11 @@ services:
       TZ: Asia/Tokyo
     volumes:
       - gogs-data:/data
+    labels:
+      # gogs image は port 22 (ssh) と 3000 (web) を両方 EXPOSE するため、
+      # Traefik docker provider が backend port を auto 推測できず service が
+      # register されない。 web port を明示する。
+      - "traefik.http.services.gogs.loadbalancer.server.port=3000"
 
 volumes:
   gogs-data:
