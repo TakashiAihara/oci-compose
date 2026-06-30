@@ -2,8 +2,8 @@ services:
   actual:
     image: actualbudget/actual-server:latest
     restart: unless-stopped
-    ports:
-      - "5006:5006"
+    expose:
+      - "5006"
     environment:
       TZ: Asia/Tokyo
     volumes:
