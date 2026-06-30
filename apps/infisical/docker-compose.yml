@@ -28,8 +28,8 @@ services:
   infisical:
     image: infisical/infisical:v0.161.9
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     depends_on:
       infisical-db:
         condition: service_healthy

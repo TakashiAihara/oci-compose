@@ -2,8 +2,8 @@ services:
   9router:
     image: decolua/9router:latest
     restart: unless-stopped
-    ports:
-      - "20128:20128"
+    expose:
+      - "20128"
     environment:
       TZ: Asia/Tokyo
       NODE_ENV: production
