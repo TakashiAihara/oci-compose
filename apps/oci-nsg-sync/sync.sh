@@ -41,11 +41,14 @@ fi
 
 log "change detected: ${LAST_IP:-<empty>} -> $NEW_IP"
 
-RULES_JSON=$(oci --auth instance_principal network nsg-security-rule list \
-  --nsg-id "$NSG_OCID" --direction INGRESS --all 2>&1) || {
-  log "ERROR: oci nsg-security-rule list failed: $RULES_JSON"
+OCI_ERR=$(mktemp)
+RULES_JSON=$(oci --auth instance_principal network nsg rules list \
+  --nsg-id "$NSG_OCID" --direction INGRESS --all 2>"$OCI_ERR") || {
+  log "ERROR: oci nsg rules list failed: $(cat "$OCI_ERR")"
+  rm -f "$OCI_ERR"
   exit 1
 }
+rm -f "$OCI_ERR"
 
 EXISTING_RULE_ID=$(echo "$RULES_JSON" | jq -r \
   --arg port "$INGRESS_PORT" --arg proto "$INGRESS_PROTOCOL" \
@@ -61,11 +64,13 @@ fi
 
 NEW_CIDR="${NEW_IP}/32"
 
+DESC="managed by oci-nsg-sync (auto-updated from $DDNS_DOMAIN)"
 UPDATE_PAYLOAD=$(jq -n \
   --arg id "$EXISTING_RULE_ID" \
   --arg src "$NEW_CIDR" \
   --arg port "$INGRESS_PORT" \
   --arg proto "$INGRESS_PROTOCOL" \
+  --arg desc "$DESC" \
   '[{
     "id": $id,
     "direction": "INGRESS",
@@ -79,15 +84,18 @@ UPDATE_PAYLOAD=$(jq -n \
         "max": ($port|tonumber)
       }
     },
-    "description": "managed by oci-nsg-sync (auto-updated from " + env.DDNS_DOMAIN + ")"
+    "description": $desc
   }]')
 
-UPDATE_RESULT=$(oci --auth instance_principal network nsg-security-rule update \
+OCI_ERR=$(mktemp)
+UPDATE_RESULT=$(oci --auth instance_principal network nsg rules update \
   --nsg-id "$NSG_OCID" \
-  --security-rules "$UPDATE_PAYLOAD" 2>&1) || {
-  log "ERROR: oci nsg-security-rule update failed: $UPDATE_RESULT"
+  --security-rules "$UPDATE_PAYLOAD" 2>"$OCI_ERR") || {
+  log "ERROR: oci nsg rules update failed: $(cat "$OCI_ERR")"
+  rm -f "$OCI_ERR"
   exit 1
 }
+rm -f "$OCI_ERR"
 
 echo "$NEW_IP" > "$STATE_FILE"
 log "updated NSG rule $EXISTING_RULE_ID source -> $NEW_CIDR"
