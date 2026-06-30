@@ -1,0 +1,49 @@
+services:
+  infisical-db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: infisical
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required, set via Coolify env}
+      POSTGRES_DB: infisical
+    volumes:
+      - infisical-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infisical"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  infisical-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - infisical-redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  infisical:
+    image: infisical/infisical:v0.161.9
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      infisical-db:
+        condition: service_healthy
+      infisical-redis:
+        condition: service_healthy
+    environment:
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?required, set via Coolify env (PI 側の値と完全一致必須、 変えると過去 secret 復号不能)}
+      AUTH_SECRET: ${AUTH_SECRET:?required, set via Coolify env}
+      DB_CONNECTION_URI: postgres://infisical:${POSTGRES_PASSWORD}@infisical-db:5432/infisical
+      REDIS_URL: redis://infisical-redis:6379
+      SITE_URL: https://infisical.takashiaihara.site
+      TELEMETRY_ENABLED: "false"
+      HTTPS_ENABLED: "false"
+
+volumes:
+  infisical-pg:
+  infisical-redis:

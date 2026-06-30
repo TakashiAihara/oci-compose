@@ -1,0 +1,13 @@
+services:
+  gogs:
+    image: gogs/gogs:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      TZ: Asia/Tokyo
+    volumes:
+      - gogs-data:/data
+
+volumes:
+  gogs-data:
