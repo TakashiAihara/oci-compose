@@ -30,6 +30,11 @@ services:
     restart: unless-stopped
     expose:
       - "8080"
+    labels:
+      # infisical image は port 443 と 8080 を両方 EXPOSE するため、
+      # Traefik docker provider が backend port を auto 推測できず
+      # service が register されない (= HTTPS 500 連発)。 web port を明示
+      - "traefik.http.services.infisical.loadbalancer.server.port=8080"
     depends_on:
       infisical-db:
         condition: service_healthy
