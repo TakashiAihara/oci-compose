@@ -12,7 +12,8 @@ services:
       POSTFIX_smtp_tls_security_level: encrypt
       HOSTNAME: smtp.takashiaihara.site
     healthcheck:
-      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/587 || exit 1"]
+      # /dev/tcp は bash 拡張。CMD-SHELL (= /bin/sh = dash) では常に失敗するので bash を明示する
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/587"]
       interval: 30s
       timeout: 5s
       retries: 3
