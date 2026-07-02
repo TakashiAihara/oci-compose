@@ -6,8 +6,8 @@ services:
     environment:
       NSG_OCID: ${NSG_OCID:?NSG_OCID required, set via Coolify env}
       DDNS_DOMAIN: ${DDNS_DOMAIN:-aihara.online}
-      INGRESS_PORT: ${INGRESS_PORT:-443}
-      INGRESS_PROTOCOL: ${INGRESS_PROTOCOL:-6}
+      # 管理対象 rule のリスト。旧 INGRESS_PORT/INGRESS_PROTOCOL より優先される
+      MANAGED_RULES: ${MANAGED_RULES:-443/tcp}
       DNS_RESOLVER: ${DNS_RESOLVER:-1.1.1.1}
       TZ: Asia/Tokyo
     volumes:
