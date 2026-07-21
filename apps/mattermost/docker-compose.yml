@@ -1,0 +1,75 @@
+services:
+  mattermost-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mattermost
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required, set via Coolify env}
+      POSTGRES_DB: mattermost
+    volumes:
+      - mattermost-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mattermost"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  mattermost:
+    # 公式 mattermost/mattermost-team-edition は amd64 のみ。 oi1 は A1 (aarch64) なので
+    # arm64 build を出しているコミュニティ image rheens/mattermost-app を使う。
+    # rheens は latest タグを publish しないため version pin 必須 (2026-07-22 時点 latest = v11.8.3)。
+    image: rheens/mattermost-app:v11.8.3
+    restart: unless-stopped
+    depends_on:
+      mattermost-db:
+        condition: service_healthy
+    expose:
+      # image の EXPOSE と entrypoint 生成 config の ListenAddress は :8000 (公式の 8065 ではない)
+      - "8000"
+    environment:
+      TZ: Asia/Tokyo
+      # --- DB (entrypoint が DB_HOST 等から datasource を組むが、 MM_ override で明示指定して固定する) ---
+      DB_HOST: mattermost-db
+      DB_PORT_NUMBER: "5432"
+      DB_USE_SSL: disable
+      MM_DBNAME: mattermost
+      MM_USERNAME: mattermost
+      MM_PASSWORD: ${POSTGRES_PASSWORD:?required, set via Coolify env}
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${POSTGRES_PASSWORD}@mattermost-db:5432/mattermost?sslmode=disable&connect_timeout=10
+      # --- Service ---
+      MM_SERVICESETTINGS_SITEURL: https://chat.takashiaihara.site
+      MM_SERVICESETTINGS_LISTENADDRESS: ":8000"
+      # 9router 週次 digest を bot として流すため incoming webhook + username/icon override を有効化
+      MM_SERVICESETTINGS_ENABLEINCOMINGWEBHOOKS: "true"
+      MM_SERVICESETTINGS_ENABLEPOSTUSERNAMEOVERRIDE: "true"
+      MM_SERVICESETTINGS_ENABLEPOSTICONOVERRIDE: "true"
+      # --- Email (内部 postfix→resend relay 経由、 n8n と同じく host=smtp:587・ 認証なし) ---
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: "true"
+      MM_EMAILSETTINGS_SMTPSERVER: smtp
+      MM_EMAILSETTINGS_SMTPPORT: "587"
+      MM_EMAILSETTINGS_ENABLESMTPAUTH: "false"
+      MM_EMAILSETTINGS_CONNECTIONSECURITY: ""
+      MM_EMAILSETTINGS_FEEDBACKEMAIL: noreply@takashiaihara.site
+      MM_EMAILSETTINGS_REPLYTOADDRESS: noreply@takashiaihara.site
+    volumes:
+      # config.json は初回起動時に生成され salt 等を持つので永続化必須 (消えるとセッション/公開リンク失効)
+      - mattermost-config:/mattermost/config
+      - mattermost-data:/mattermost/data
+      - mattermost-logs:/mattermost/logs
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/api/v4/system/ping || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+volumes:
+  mattermost-pg:
+  mattermost-config:
+  mattermost-data:
+  mattermost-logs:
+  mattermost-plugins:
+  mattermost-client-plugins:
