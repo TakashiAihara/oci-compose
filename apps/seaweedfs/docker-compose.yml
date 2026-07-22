@@ -1,0 +1,44 @@
+# SeaweedFS core (oi1): master + filer + S3 gateway + volume server
+# host network 前提: ノード間通信は VCN private IP 直 (SL で subnet 内 all 許可済み)
+# port 割当: master 9333 / filer 8889 / s3 8333 / volume 8081 (8080,8888 は traefik/tinyproxy が使用中)
+services:
+  master:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    network_mode: host
+    command: 'master -ip=${NODE_IP:?set in Coolify env} -port=9333 -mdir=/data -defaultReplication=000 -volumeSizeLimitMB=5000'
+    volumes:
+      - seaweedfs-master:/data
+
+  volume:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    network_mode: host
+    command: 'volume -mserver=${NODE_IP}:9333 -ip=${NODE_IP} -port=8081 -dir=/data -max=${MAX_VOLUMES:-4} -minFreeSpacePercent=7'
+    volumes:
+      # oi1 は boot volume の空きを提供する (block volume /data は docker 専用)
+      - /srv/seaweedfs:/data
+    depends_on:
+      - master
+
+  filer:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    network_mode: host
+    command: 'filer -master=${NODE_IP}:9333 -ip=${NODE_IP} -port=8889 -defaultStoreDir=/data'
+    volumes:
+      - seaweedfs-filer:/data
+    depends_on:
+      - master
+
+  s3:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    network_mode: host
+    command: 's3 -filer=${NODE_IP}:8889 -port=8333'
+    depends_on:
+      - filer
+
+volumes:
+  seaweedfs-master:
+  seaweedfs-filer:

@@ -1,0 +1,15 @@
+# SeaweedFS volume server (oi2 / oi3 / oim1 / oim2 共通)
+# 各ノードの boot volume 空き容量を /srv/seaweedfs で提供する
+# RAM 1GB ノードのため memory limit 400M (volume server 実測 ~100-200M 想定)
+services:
+  volume:
+    image: chrislusf/seaweedfs:latest
+    restart: unless-stopped
+    network_mode: host
+    command: 'volume -mserver=${SEAWEED_MASTER:?set in Coolify env} -ip=${NODE_IP:?set in Coolify env} -port=8081 -dir=/data -max=${MAX_VOLUMES:-7} -minFreeSpacePercent=7'
+    volumes:
+      - /srv/seaweedfs:/data
+    deploy:
+      resources:
+        limits:
+          memory: 400M
