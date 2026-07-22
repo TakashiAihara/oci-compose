@@ -17,19 +17,24 @@
 
 | key | 説明 |
 |---|---|
-| `POSTGRES_PASSWORD` | mattermost DB パスワード。 新規発行 (旧 k3s の値は破棄済み)。 Infisical `home/prod` にも同名で格納 |
+| `POSTGRES_PASSWORD` | mattermost DB パスワード。 新規 32 桁を生成し Coolify env に投入済み (= runtime の source of truth、 暗号化保存)。 旧 k3s の値は破棄済み。 Infisical `home/prod` へのミラーは machine identity が read-only のため未実施 (欲しければ Coolify UI から値を写して手動投入)。 内部 DB 用途で外部依存が無く再発行も容易 |
 
-## Coolify 設定
+## Coolify 設定 (API で構築済み)
 
-- Resource Type: Docker Compose
-- Git URL: `https://github.com/TakashiAihara/oci-compose.git`
-- Base Directory: `apps/mattermost`
-- Domain: `chat.takashiaihara.site` (wildcard cert 既存)
-- Env Vars: `POSTGRES_PASSWORD` (secret 扱い)
+skill `ta.oci.add-app` の手順で Coolify API + tinker により構築済み。
 
-## 初回セットアップ (deploy 後・ユーザー作業)
+- Resource: application uuid `gz3c8sl1yqqjug1khvagumdb` (project oci-apps / localhost server)
+- Build Pack: Docker Compose / Base Directory `/apps/mattermost`
+- Domain: `chat.takashiaihara.site` (service `mattermost` にバインド、 wildcard cert 既存)
+- `connect_to_docker_network = true` (Traefik ルーティング + 内部 smtp 到達の前提)
+- Env: `POSTGRES_PASSWORD` (生成値を注入済み)
+- git branch: 一旦 `feat/mattermost-rebuild` を指す。 **PR merge 後に `main` へ戻す** (API PATCH `git_branch`)
 
-1. `https://chat.takashiaihara.site` を開いて初回管理者アカウントを作成
+deploy 済み・HTTPS `chat.takashiaihara.site/api/v4/system/ping` = 200 (status OK) を確認済み。
+
+## 初回セットアップ (ユーザー作業)
+
+1. `https://chat.takashiaihara.site` を開いて初回管理者アカウントを作成 (自宅 IP からのみ到達可、 NSG home-only 傘下)
 2. System Console → Integrations → Integration Management で Incoming Webhooks = true を確認 (compose 側で有効化済み)
 3. digest 投稿用チャンネル (例: `9router-updates`) を作成
 4. そのチャンネルで Incoming Webhook を発行し、 URL を Infisical `home/prod` に `MATTERMOST_9ROUTER_WEBHOOK_URL` 等で格納
