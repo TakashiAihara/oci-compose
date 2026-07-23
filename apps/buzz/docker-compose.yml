@@ -89,6 +89,10 @@ services:
       BUZZ_MEDIA_BASE_URL: https://buzz.takashiaihara.site/media
       RELAY_OWNER_PUBKEY: ${RELAY_OWNER_PUBKEY:?required, set via Coolify env}
       BUZZ_RELAY_PRIVATE_KEY: ${BUZZ_RELAY_PRIVATE_KEY:?required, set via Coolify env}
+      # binary default は false (= 認証済みなら誰でも入れる open relay)。
+      # 公開 URL なので Helm chart の production default に合わせて閉じる。
+      # owner は起動時に bootstrap_owner で自動 admit される
+      BUZZ_REQUIRE_RELAY_MEMBERSHIP: "true"
       BUZZ_AUTO_MIGRATE: "true"
       DATABASE_URL: postgres://buzz:${POSTGRES_PASSWORD}@buzz-db:5432/buzz
       REDIS_URL: redis://buzz-redis:6379
