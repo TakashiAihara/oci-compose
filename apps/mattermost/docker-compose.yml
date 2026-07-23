@@ -38,7 +38,7 @@ services:
       MM_SQLSETTINGS_DRIVERNAME: postgres
       MM_SQLSETTINGS_DATASOURCE: postgres://mattermost:${POSTGRES_PASSWORD}@mattermost-db:5432/mattermost?sslmode=disable&connect_timeout=10
       # --- Service ---
-      MM_SERVICESETTINGS_SITEURL: https://chat.takashiaihara.site
+      MM_SERVICESETTINGS_SITEURL: https://mattermost.takashiaihara.site
       MM_SERVICESETTINGS_LISTENADDRESS: ":8000"
       # 9router 週次 digest を bot として流すため incoming webhook + username/icon override を有効化
       MM_SERVICESETTINGS_ENABLEINCOMINGWEBHOOKS: "true"
