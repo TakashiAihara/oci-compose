@@ -1,0 +1,53 @@
+services:
+  kaneo-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kaneo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required, set via Coolify env}
+      POSTGRES_DB: kaneo
+    volumes:
+      - kaneo-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kaneo"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  kaneo:
+    # api + web 同梱の bundled image (arm64 manifest あり)。 EXPOSE は 5173 のみなので
+    # Traefik の backend port auto 推測が効き、 loadbalancer.server.port label は不要
+    image: ghcr.io/usekaneo/kaneo:latest
+    restart: unless-stopped
+    depends_on:
+      kaneo-db:
+        condition: service_healthy
+    expose:
+      - "5173"
+    environment:
+      DATABASE_URL: postgres://kaneo:${POSTGRES_PASSWORD}@kaneo-db:5432/kaneo
+      KANEO_CLIENT_URL: https://kaneo.takashiaihara.site
+      AUTH_SECRET: ${AUTH_SECRET:?required, set via Coolify env}
+      # SMTP は同一 coolify network の postfix (apps/smtp) 経由で Resend へ中継。
+      # 内部通信なので認証なし。 postfix は自己署名 cert なので TLS を掴ませない
+      SMTP_HOST: smtp
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_REQUIRE_TLS: "false"
+      SMTP_IGNORE_TLS: "true"
+      SMTP_FROM: noreply@takashiaihara.site
+      # SMTP 設定時の default はメール OTP ログイン。 個人利用なので email/password に倒す
+      # (workspace 招待メールは引き続き SMTP を使う)
+      DISABLE_EMAIL_OTP_SIGN_IN: "true"
+      DISABLE_GUEST_ACCESS: "true"
+      # 公開 URL なので初回アカウント作成後に Coolify env で true へ切り替える
+      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5173/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  kaneo-pg:
