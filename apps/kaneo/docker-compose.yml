@@ -42,6 +42,10 @@ services:
       DISABLE_GUEST_ACCESS: "true"
       # 公開 URL なので初回アカウント作成後に Coolify env で true へ切り替える
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+      # 通知先の ntfy は同 network の内部サービス (http://ntfy) を指す。 oi1 は自身の
+      # public IP にヘアピンできず https://ntfy.takashiaihara.site には到達不能なため。
+      # private 宛先は default で SSRF ガードに弾かれるので明示的に許可する
+      KANEO_ALLOW_PRIVATE_WEBHOOK_DESTINATIONS: "true"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5173/api/health"]
       interval: 30s
