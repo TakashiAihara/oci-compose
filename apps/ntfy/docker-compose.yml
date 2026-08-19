@@ -14,11 +14,22 @@ services:
       NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
       NTFY_SMTP_SENDER_ADDR: smtp:587
       NTFY_SMTP_SENDER_FROM: noreply@takashiaihara.site
+      # Web UI のログイン・アカウント画面・アクセストークン発行を有効化する。
+      # signup は入れない (private instance。ユーザー追加は ntfy user add で行う)
+      NTFY_ENABLE_LOGIN: "true"
+      # iOS は self-host サーバから直接 push を受け取れないため、poll request を
+      # ntfy.sh に転送する。転送されるのは base-url + topic のハッシュのみで本文は載らない
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+      # ブラウザを閉じていても通知を受けるための Web Push (VAPID)。
+      # 公開鍵は公開前提の値なので直書き、秘密鍵は Coolify env で注入する
+      NTFY_WEB_PUSH_PUBLIC_KEY: BC9_54Enwg7Ahoqqd8Y1X0ShwOE1zJsNMmlCTQ3omcPCgr1RPmCX6HmktdRThfu9U3NZgWBlHho6Xum_xg7yAbA
+      NTFY_WEB_PUSH_PRIVATE_KEY: ${NTFY_WEB_PUSH_PRIVATE_KEY}
+      NTFY_WEB_PUSH_FILE: /var/cache/ntfy/webpush.db
+      NTFY_WEB_PUSH_EMAIL_ADDRESS: noreply@takashiaihara.site
     volumes:
       - ntfy-auth:/var/lib/ntfy/auth
       - ntfy-cache:/var/cache/ntfy
       - ntfy-attachments:/var/lib/ntfy/attachments
-      - ./config:/etc/ntfy
 
 volumes:
   ntfy-auth:
