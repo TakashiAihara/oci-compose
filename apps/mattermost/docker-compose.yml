@@ -17,8 +17,9 @@ services:
   mattermost:
     # 公式 mattermost/mattermost-team-edition は amd64 のみ。 oi1 は A1 (aarch64) なので
     # arm64 build を出しているコミュニティ image rheens/mattermost-app を使う。
-    # rheens は latest タグを publish しないため version pin 必須 (2026-07-22 時点 latest = v11.8.3)。
-    image: rheens/mattermost-app:v11.8.3
+    # rheens は latest タグを publish しないため version pin 必須 (2026-08-19 時点 rheens 最新 = v11.9.0)。
+    # upstream の v11.9.1 / v11.10.0 は rheens 側が未ビルド。arm64 image が要るのでここが上限
+    image: rheens/mattermost-app:v11.9.0
     restart: unless-stopped
     depends_on:
       mattermost-db:
