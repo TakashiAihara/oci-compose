@@ -5,14 +5,20 @@
 #   - version を 2.17.1 に固定 (公式 compose の default は 2.16)
 #   - frontend は ports ではなく expose。HTTPS 終端は Coolify の Traefik に任せる
 #   - mailcatch を削除し、内部 postfix (smtp サービス、Resend 中継) を使う
-#   - /mcp/* にだけ Traefik basic auth をかける (後述)
+#   - /mcp/* の basic auth はこの compose では扱わない (後述)
 #   - oi1 は RAM 22GB 中の空きが限られるので全サービスにメモリ上限を置く
 #
 # MCP について:
 #   frontend の nginx が /mcp/ws (プラグイン用 WebSocket) と /mcp/stream
 #   (MCP クライアント用 Streamable HTTP) を penpot-mcp に proxy する。
-#   MCP サーバ自体は認証を持たないので、公開ドメイン配下に出る /mcp/* は
-#   Traefik の basic auth で塞ぐ。
+#   MCP サーバ自体は認証を持たないので /mcp/* を basic auth で塞ぐが、
+#   その設定はこの compose ではなく Traefik の file provider 側に置く
+#   (oi1: /data/coolify/proxy/dynamic/penpot-mcp-auth.yaml)。理由は 2 つ:
+#     1. compose の labels に middleware を定義すると、Coolify がそれを
+#        自分の生成 router にも自動で付けてしまい、/ を含む全パスが
+#        401 になる (2026-08-20 に実測)
+#     2. labels 内の ${VAR} は Coolify env で展開されず literal のまま入る
+#   file provider 側なら認証情報を public repo に置かずに済む利点もある。
 
 x-flags: &penpot-flags
   # disable-email-verification: 自分ひとりで使うので確認メールを挟まない
@@ -42,18 +48,6 @@ services:
       - penpot-assets:/opt/data/assets
     environment:
       <<: [*penpot-flags, *penpot-http-body-size, *penpot-public-uri]
-    labels:
-      # Coolify が生成する router は PathPrefix(`/`) なので、より長い
-      # PathPrefix(`/mcp`) がこの router に優先的にマッチする
-      # (Traefik の既定 priority = rule の長さ)。
-      - "traefik.http.services.penpot-mcpauth.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.penpot-mcpauth.basicauth.users=${PENPOT_MCP_BASIC_AUTH:?set in Coolify env}"
-      - "traefik.http.routers.penpot-mcpauth.rule=Host(`penpot.takashiaihara.site`) && PathPrefix(`/mcp`)"
-      - "traefik.http.routers.penpot-mcpauth.entryPoints=https"
-      - "traefik.http.routers.penpot-mcpauth.tls=true"
-      - "traefik.http.routers.penpot-mcpauth.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.penpot-mcpauth.middlewares=penpot-mcpauth"
-      - "traefik.http.routers.penpot-mcpauth.service=penpot-mcpauth"
     deploy:
       resources:
         limits:
