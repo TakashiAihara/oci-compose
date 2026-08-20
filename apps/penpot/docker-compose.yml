@@ -1,0 +1,157 @@
+# Penpot (OSS design tool) — 公式 docker-compose を oi1 / Coolify 向けに調整したもの。
+# 元: https://github.com/penpot/penpot/blob/main/docker/images/docker-compose.yaml
+#
+# 公式との差分:
+#   - version を 2.17.1 に固定 (公式 compose の default は 2.16)
+#   - frontend は ports ではなく expose。HTTPS 終端は Coolify の Traefik に任せる
+#   - mailcatch を削除し、内部 postfix (smtp サービス、Resend 中継) を使う
+#   - /mcp/* にだけ Traefik basic auth をかける (後述)
+#   - oi1 は RAM 22GB 中の空きが限られるので全サービスにメモリ上限を置く
+#
+# MCP について:
+#   frontend の nginx が /mcp/ws (プラグイン用 WebSocket) と /mcp/stream
+#   (MCP クライアント用 Streamable HTTP) を penpot-mcp に proxy する。
+#   MCP サーバ自体は認証を持たないので、公開ドメイン配下に出る /mcp/* は
+#   Traefik の basic auth で塞ぐ。
+
+x-flags: &penpot-flags
+  # disable-email-verification: 自分ひとりで使うので確認メールを挟まない
+  # enable-registration: 初回アカウント作成のため。作成後に disable-registration へ切り替える
+  PENPOT_FLAGS: enable-smtp enable-prepl-server enable-mcp disable-email-verification enable-registration
+
+x-uri: &penpot-public-uri
+  PENPOT_PUBLIC_URI: https://penpot.takashiaihara.site
+
+x-body-size: &penpot-http-body-size
+  PENPOT_HTTP_SERVER_MAX_BODY_SIZE: 367001600
+
+x-secret-key: &penpot-secret-key
+  PENPOT_SECRET_KEY: ${PENPOT_SECRET_KEY:?set in Coolify env}
+
+services:
+  penpot-frontend:
+    image: penpotapp/frontend:2.17.1
+    restart: unless-stopped
+    expose:
+      - "8080"
+    depends_on:
+      - penpot-backend
+      - penpot-exporter
+      - penpot-mcp
+    volumes:
+      - penpot-assets:/opt/data/assets
+    environment:
+      <<: [*penpot-flags, *penpot-http-body-size, *penpot-public-uri]
+    labels:
+      # Coolify が生成する router は PathPrefix(`/`) なので、より長い
+      # PathPrefix(`/mcp`) がこの router に優先的にマッチする
+      # (Traefik の既定 priority = rule の長さ)。
+      - "traefik.http.services.penpot-mcpauth.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.penpot-mcpauth.basicauth.users=${PENPOT_MCP_BASIC_AUTH:?set in Coolify env}"
+      - "traefik.http.routers.penpot-mcpauth.rule=Host(`penpot.takashiaihara.site`) && PathPrefix(`/mcp`)"
+      - "traefik.http.routers.penpot-mcpauth.entryPoints=https"
+      - "traefik.http.routers.penpot-mcpauth.tls=true"
+      - "traefik.http.routers.penpot-mcpauth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.penpot-mcpauth.middlewares=penpot-mcpauth"
+      - "traefik.http.routers.penpot-mcpauth.service=penpot-mcpauth"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  penpot-backend:
+    image: penpotapp/backend:2.17.1
+    restart: unless-stopped
+    depends_on:
+      penpot-postgres:
+        condition: service_healthy
+      penpot-valkey:
+        condition: service_healthy
+    volumes:
+      - penpot-assets:/opt/data/assets
+    environment:
+      <<: [*penpot-flags, *penpot-public-uri, *penpot-http-body-size, *penpot-secret-key]
+      PENPOT_DATABASE_URI: postgresql://penpot-postgres/penpot
+      PENPOT_DATABASE_USERNAME: penpot
+      PENPOT_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set in Coolify env}
+      PENPOT_REDIS_URI: redis://penpot-valkey/0
+      PENPOT_OBJECTS_STORAGE_BACKEND: fs
+      PENPOT_OBJECTS_STORAGE_FS_DIRECTORY: /opt/data/assets
+      PENPOT_TELEMETRY_ENABLED: "false"
+      # 内部 postfix 経由で Resend に中継する。docker network 上の平文通信なので TLS は張らない
+      PENPOT_SMTP_DEFAULT_FROM: noreply@takashiaihara.site
+      PENPOT_SMTP_DEFAULT_REPLY_TO: noreply@takashiaihara.site
+      PENPOT_SMTP_HOST: smtp
+      PENPOT_SMTP_PORT: 587
+      PENPOT_SMTP_TLS: "false"
+      PENPOT_SMTP_SSL: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+
+  penpot-exporter:
+    image: penpotapp/exporter:2.17.1
+    restart: unless-stopped
+    depends_on:
+      penpot-valkey:
+        condition: service_healthy
+    environment:
+      <<: [*penpot-secret-key, *penpot-public-uri]
+      PENPOT_INTERNAL_URI: http://penpot-frontend:8080
+      PENPOT_REDIS_URI: redis://penpot-valkey/0
+    deploy:
+      resources:
+        limits:
+          # headless Chromium を起動するので他より多めに取る
+          memory: 1024M
+
+  penpot-mcp:
+    image: penpotapp/mcp:2.17.1
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  penpot-postgres:
+    image: postgres:15
+    restart: unless-stopped
+    stop_signal: SIGINT
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penpot"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - penpot-postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_INITDB_ARGS: --data-checksums
+      POSTGRES_DB: penpot
+      POSTGRES_USER: penpot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in Coolify env}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  penpot-valkey:
+    image: valkey/valkey:8.1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    environment:
+      VALKEY_EXTRA_FLAGS: --maxmemory 128mb --maxmemory-policy volatile-lfu
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+volumes:
+  penpot-assets:
+  penpot-postgres:
