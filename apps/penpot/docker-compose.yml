@@ -22,8 +22,9 @@
 
 x-flags: &penpot-flags
   # disable-email-verification: 自分ひとりで使うので確認メールを挟まない
-  # enable-registration: 初回アカウント作成のため。作成後に disable-registration へ切り替える
-  PENPOT_FLAGS: enable-smtp enable-prepl-server enable-mcp disable-email-verification enable-registration
+  # disable-registration: 初回アカウント作成後に閉じた (2026-08-21)。以後ユーザーを
+  #   増やす場合は招待経由か、一時的にこのフラグを戻して作成し、また閉じる
+  PENPOT_FLAGS: enable-smtp enable-prepl-server enable-mcp disable-email-verification disable-registration
 
 x-uri: &penpot-public-uri
   PENPOT_PUBLIC_URI: https://penpot.takashiaihara.site
