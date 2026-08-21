@@ -103,6 +103,13 @@ services:
   penpot-mcp:
     image: penpotapp/mcp:2.17.1
     restart: unless-stopped
+    # 公式イメージの CMD は ["node","index.js","--multi-user"] で multi-user が
+    # 焼き込まれている。multi-user は userToken 必須だが、プラグイン側は
+    # トークンを持たないため "Disconnected: Missing userToken parameter" で
+    # 接続できない (2026-08-21 実測)。upstream の docs でも multi-user は
+    # "under development and not yet fully integrated" とされているので、
+    # 単独利用では --multi-user を外して single-user で動かす。
+    command: ["node", "index.js"]
     deploy:
       resources:
         limits:
