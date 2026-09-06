@@ -1,0 +1,42 @@
+services:
+  hermes:
+    # Nous Research の Hermes Agent。 gateway (Slack) + web dashboard を
+    # 1 コンテナで s6-overlay が supervise する構成。
+    #
+    # upstream の docker-compose.yml は network_mode: host + 2 サービスに
+    # 分けているが、 ここでは採らない:
+    #   - host network は OCI Ubuntu の iptables INPUT REJECT に当たる
+    #     (memory reference_oci_ubuntu_iptables_input_reject)
+    #   - Coolify + Traefik の routing は bridge network が前提
+    # dashboard を別コンテナにしないのは、 gateway の liveness 検出が
+    # PID namespace 共有を要求するため (upstream docs 明記)。
+    image: nousresearch/hermes-agent:latest
+    restart: unless-stopped
+    expose:
+      - "9119"
+    environment:
+      # dashboard を s6 の supervised service として起動する。
+      # 認証 provider が未設定のうちは非 loopback bind で fail-closed するのが
+      # 正常動作 (2026-06 の無認証 dashboard 悪用への対策)。 資格情報は
+      # Coolify env ではなく volume 内の /opt/data/.env に置く (ハッシュを
+      # Coolify の DB に残さないため)。
+      HERMES_DASHBOARD: "1"
+    volumes:
+      # config / API キー / セッション / skills / memories が全部ここに入る。
+      # image 自体は stateless なので upgrade は pull のみで設定は残る。
+      - hermes-data:/opt/data
+    command: ["gateway", "run"]
+    labels:
+      # この image は EXPOSE を 1 つも持たない (Dockerfile に EXPOSE 行なし) ため
+      # Traefik が backend port を auto 推測できない。 明示しないと 500 になる。
+      - "traefik.http.services.hermes.loadbalancer.server.port=9119"
+    deploy:
+      resources:
+        limits:
+          # oi1 は 12 GB を 40 コンテナ超で共有しており、 available は常時 6 GB 前後。
+          # エージェントは Playwright やサブプロセスを起動するので上限を切っておく
+          # (無制限だと OOM が同居コンテナを巻き込む)。 足りなければ上げてよい。
+          memory: 3g
+
+volumes:
+  hermes-data:
