@@ -1,0 +1,45 @@
+# OAuth 直結の 3 インスタンス。9router を経由しないので共有 coolify network に
+# 繋がない (connect_to_docker_network = false)。同居する 40 コンテナへの
+# 横移動経路を作らないための分離で、Slack は Socket Mode の outbound のみ。
+services:
+  hermes-codex:
+    # ask_codex + repo_vault。ChatGPT / Codex サブスクリプションに OAuth で直結。
+    image: nousresearch/hermes-agent:latest
+    restart: unless-stopped
+    volumes:
+      - hermes-codex-data:/opt/data
+    command: ["gateway", "run"]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  hermes-claude:
+    # ask_claude + repo_vault。anthropic provider に CLAUDE_CODE_OAUTH_TOKEN で直結。
+    image: nousresearch/hermes-agent:latest
+    restart: unless-stopped
+    volumes:
+      - hermes-claude-data:/opt/data
+    command: ["gateway", "run"]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  hermes-modal:
+    # ask_modal + repo_vault。Modal 上の open-weights なので、モデル提供者が
+    # 学習に使う経路が無い。scale-to-zero のため初回応答に 19 秒前後かかる。
+    image: nousresearch/hermes-agent:latest
+    restart: unless-stopped
+    volumes:
+      - hermes-modal-data:/opt/data
+    command: ["gateway", "run"]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+volumes:
+  hermes-codex-data:
+  hermes-claude-data:
+  hermes-modal-data:
