@@ -1,0 +1,24 @@
+services:
+  syncthing:
+    image: syncthing/syncthing:latest
+    restart: unless-stopped
+    hostname: syncthing-oi1
+    # GUI を Traefik の後ろに置くため 0.0.0.0 で listen する。loopback 以外なら
+    # Syncthing は Host ヘッダ検査を外すので、外側の名前でそのまま開ける。
+    # GUI の user / password は初回起動後に REST で入れ、config.xml (volume) に残る
+    environment:
+      STGUIADDRESS: 0.0.0.0:8384
+    expose:
+      - "8384"
+    # 同期経路は Traefik を通さず host port で受ける (相互 TLS。VPN / NSG の内側だけ)
+    ports:
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+    labels:
+      # image が 8384 / 22000 / 21027 を EXPOSE しているので web port を明示する
+      - "traefik.http.services.syncthing.loadbalancer.server.port=8384"
+    volumes:
+      - syncthing-data:/var/syncthing
+
+volumes:
+  syncthing-data:
