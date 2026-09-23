@@ -1,4 +1,4 @@
-# SeaweedFS volume server (oi2 / oi3 / oim1 / oim2 共通)
+# SeaweedFS volume server (oim1 / oim2 共通)
 # 各ノードの boot volume 空き容量を /srv/seaweedfs で提供する
 # RAM 1GB ノードのため memory limit 400M (volume server 実測 ~100-200M 想定)
 services:

@@ -1,8 +1,10 @@
 # SeaweedFS core (oi1): master + filer + S3 gateway
 # host network 前提: ノード間通信は VCN private IP 直 (SL で subnet 内 all 許可済み)
 # port 割当: master 9333 / filer 8889 / s3 8333 (8080,8888 は traefik/tinyproxy が使用中)
-# volume server は oim1 / oim2 だけに置く。oi1 の /srv/seaweedfs は boot volume なので、
-# 詰まると apt / journald / lego の証明書更新が苦しくなる。遊休ディスクは oim 側にある
+# volume server は置かない。oi1 の boot volume には master / filer / s3 / Coolify / traefik /
+# lego / apt / journald が同居しており、ここが詰まると証明書更新まで巻き込む (oim1 / oim2 の
+# boot volume はこれらと同居していない)。block volume (/data) は docker 専用。
+# 遊休ディスクは oim1 / oim2 側にあるので volume server はそちらに置く
 services:
   master:
     image: chrislusf/seaweedfs:latest
