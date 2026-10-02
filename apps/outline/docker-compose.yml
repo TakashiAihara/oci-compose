@@ -1,0 +1,73 @@
+services:
+  outline-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: outline
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set via Coolify env}
+      POSTGRES_DB: outline
+    volumes:
+      - outline-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outline"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  outline-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - outline-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  outline:
+    image: outlinewiki/outline:latest
+    restart: unless-stopped
+    depends_on:
+      outline-db:
+        condition: service_healthy
+      outline-redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+    environment:
+      URL: https://outline.takashiaihara.site
+      PORT: "3000"
+      SECRET_KEY: ${SECRET_KEY:?set via Coolify env}
+      UTILS_SECRET: ${UTILS_SECRET:?set via Coolify env}
+      DATABASE_URL: postgres://outline:${POSTGRES_PASSWORD}@outline-db:5432/outline
+      PGSSLMODE: disable
+      REDIS_URL: redis://outline-redis:6379
+      # 添付は S3 (SeaweedFS) ではなく volume に置く。SeaweedFS の volume は 1 GB の oim1/2 にあり、
+      # 自宅からの帯域も 1 MB/s 前後なので、編集中に開く画像の置き場にしない
+      FILE_STORAGE: local
+      FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
+      # TLS の終端と https への redirect は Traefik が持つ。コンテナ内でも redirect すると
+      # 127.0.0.1:3000 を平文で叩く healthcheck まで https に飛ばされる
+      FORCE_HTTPS: "false"
+      DEFAULT_LANGUAGE: ja_JP
+      # ログインはメールのマジックリンク。apps/smtp (postfix → Resend) を同じ coolify network で使う。
+      # postfix の内部 listener は STARTTLS を出さない (apps/smtp のコメント参照)
+      SMTP_HOST: smtp
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_DISABLE_STARTTLS: "true"
+      SMTP_FROM_EMAIL: outline@takashiaihara.site
+    volumes:
+      - outline-data:/var/lib/outline/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/_health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+
+volumes:
+  outline-pg:
+  outline-redis:
+  outline-data:
