@@ -9,6 +9,8 @@ services:
       CRON_MIN: "3,33"
       # Traefik (coolify-proxy) reaches the app over the coolify network
       TRUSTED_PROXY: 10.0.2.0/24
+      # Feeds from apps/rsshub-custom over the coolify network; FreshRSS blocks private hosts otherwise
+      INTERNAL_HOST_ALLOWLIST: rsshub-custom:1200
       # Both run only on the first start (empty data volume)
       FRESHRSS_INSTALL: >-
         --api-enabled
