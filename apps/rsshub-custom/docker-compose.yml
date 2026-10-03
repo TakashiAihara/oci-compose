@@ -1,0 +1,27 @@
+services:
+  rsshub:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      CACHE_TYPE: redis
+      REDIS_URL: redis://redis:6379/
+      PLAYWRIGHT_CDP_ENDPOINT: ws://browser:3000
+    depends_on:
+      - redis
+      - browser
+
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    volumes:
+      - rsshub-custom-redis:/data
+
+  browser:
+    image: dgtlmoon/sockpuppetbrowser:latest
+    restart: unless-stopped
+    cap_add:
+      - SYS_ADMIN
+
+volumes:
+  rsshub-custom-redis:
