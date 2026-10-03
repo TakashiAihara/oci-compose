@@ -9,8 +9,9 @@ services:
       CRON_MIN: "3,33"
       # Traefik (coolify-proxy) reaches the app over the coolify network
       TRUSTED_PROXY: 10.0.2.0/24
-      # rsshub.takashiaihara.site is pinned to the host below; FreshRSS blocks private hosts otherwise
-      INTERNAL_HOST_ALLOWLIST: rsshub.takashiaihara.site:443
+      # apps/rsshub over the coolify network (oi1 cannot hairpin to its public name);
+      # FreshRSS blocks private hosts otherwise
+      INTERNAL_HOST_ALLOWLIST: rsshub:1200
       # Both run only on the first start (empty data volume)
       FRESHRSS_INSTALL: >-
         --api-enabled
@@ -23,10 +24,7 @@ services:
         --api-password ${FRESHRSS_API_PASSWORD:?set in Coolify env}
         --language ja
         --no-default-feeds
-    # oi1 cannot hairpin to its own public IP, so reach the proxy on the host
-    # directly; the feed URL stays the one seen in the browser.
-    extra_hosts:
-      - "rsshub.takashiaihara.site:host-gateway"
+
     volumes:
       - freshrss-data:/var/www/FreshRSS/data
       - freshrss-extensions:/var/www/FreshRSS/extensions
