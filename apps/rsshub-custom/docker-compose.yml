@@ -1,23 +1,25 @@
+# Coolify joins every service to the shared `coolify` network so FreshRSS can
+# reach the feed, and service names resolve there across apps: keep them unique.
 services:
-  rsshub:
+  rsshub-custom:
     build: .
     restart: unless-stopped
     environment:
       NODE_ENV: production
       CACHE_TYPE: redis
-      REDIS_URL: redis://redis:6379/
-      PLAYWRIGHT_CDP_ENDPOINT: ws://browser:3000
+      REDIS_URL: redis://rsshub-custom-redis:6379/
+      PLAYWRIGHT_CDP_ENDPOINT: ws://rsshub-custom-browser:3000
     depends_on:
-      - redis
-      - browser
+      - rsshub-custom-redis
+      - rsshub-custom-browser
 
-  redis:
+  rsshub-custom-redis:
     image: redis:alpine
     restart: unless-stopped
     volumes:
       - rsshub-custom-redis:/data
 
-  browser:
+  rsshub-custom-browser:
     image: dgtlmoon/sockpuppetbrowser:latest
     restart: unless-stopped
     cap_add:
