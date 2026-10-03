@@ -1,0 +1,36 @@
+services:
+  freshrss:
+    image: freshrss/freshrss:latest
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      TZ: Asia/Tokyo
+      CRON_MIN: "3,33"
+      # Traefik (coolify-proxy) reaches the app over the coolify network
+      TRUSTED_PROXY: 10.0.2.0/24
+      # Both run only on the first start (empty data volume)
+      FRESHRSS_INSTALL: >-
+        --api-enabled
+        --base-url https://freshrss.takashiaihara.site
+        --default-user takashi
+        --language ja
+      FRESHRSS_USER: >-
+        --user takashi
+        --password ${FRESHRSS_ADMIN_PASSWORD:?set in Coolify env}
+        --api-password ${FRESHRSS_API_PASSWORD:?set in Coolify env}
+        --language ja
+        --no-default-feeds
+    volumes:
+      - freshrss-data:/var/www/FreshRSS/data
+      - freshrss-extensions:/var/www/FreshRSS/extensions
+    healthcheck:
+      test: ["CMD", "cli/health.php"]
+      timeout: 10s
+      start_period: 60s
+      interval: 75s
+      retries: 3
+
+volumes:
+  freshrss-data:
+  freshrss-extensions:
