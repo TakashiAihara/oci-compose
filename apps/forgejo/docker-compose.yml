@@ -17,9 +17,13 @@ services:
       FORGEJO__security__INSTALL_LOCK: "true"
       FORGEJO__service__DISABLE_REGISTRATION: "true"
       FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
-      # Gogs からの移行は coolify network 越しに service 名で引くので、内側の宛先を許す
-      FORGEJO__migrations__ALLOWED_DOMAINS: gogs,gogs.takashiaihara.site
+      # Gogs からの移行で、Gogs のホスト名が内側の宛先 (host-gateway) に解決されるのを許す
+      FORGEJO__migrations__ALLOWED_DOMAINS: gogs.takashiaihara.site
       FORGEJO__migrations__ALLOW_LOCALNETWORKS: "true"
+    # Gogs からの移行は Gogs API が返す clone_url (公開ホスト名) で clone する。oi1 の内側から公開 IP には
+    # 戻れない (hairpin 不可) ので、ホスト経由で coolify-proxy に届ける。REMOVE WHEN: Gogs を退役したら
+    extra_hosts:
+      - "gogs.takashiaihara.site:host-gateway"
     volumes:
       - forgejo-data:/data
     labels:
