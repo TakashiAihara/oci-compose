@@ -24,7 +24,6 @@ services:
         --api-password ${FRESHRSS_API_PASSWORD:?set in Coolify env}
         --language ja
         --no-default-feeds
-
     volumes:
       - freshrss-data:/var/www/FreshRSS/data
       - freshrss-extensions:/var/www/FreshRSS/extensions
