@@ -34,7 +34,6 @@ services:
       SMTP_PORT: "587"
       SMTP_SECURE: "false"
       SMTP_REQUIRE_TLS: "false"
-      SMTP_IGNORE_TLS: "true"
       SMTP_FROM: noreply@takashiaihara.site
       # SMTP 設定時の default はメール OTP ログイン。 個人利用なので email/password に倒す
       # (workspace 招待メールは引き続き SMTP を使う)
