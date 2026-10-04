@@ -1,0 +1,30 @@
+services:
+  forgejo:
+    # メジャー版は DB migration を伴うので、上げるときは release notes を読んでから tag を変える
+    image: codeberg.org/forgejo/forgejo:16
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      TZ: Asia/Tokyo
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__server__DOMAIN: forgejo.takashiaihara.site
+      FORGEJO__server__ROOT_URL: https://forgejo.takashiaihara.site/
+      # 22 番は oi1 の sshd が使っていて外に出していない。clone は HTTPS だけにする
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
+      # Gogs からの移行は coolify network 越しに service 名で引くので、内側の宛先を許す
+      FORGEJO__migrations__ALLOWED_DOMAINS: gogs,gogs.takashiaihara.site
+      FORGEJO__migrations__ALLOW_LOCALNETWORKS: "true"
+    volumes:
+      - forgejo-data:/data
+    labels:
+      # image が 22 (ssh) と 3000 (web) を EXPOSE するので、Traefik に web の port を明示する
+      - "traefik.http.services.forgejo.loadbalancer.server.port=3000"
+
+volumes:
+  forgejo-data:
