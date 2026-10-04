@@ -9,7 +9,7 @@ RSSHub built from upstream master with this directory's own routes, plus Chromiu
     - oi1 cannot hairpin to its own public IP, so FreshRSS cannot fetch the public name
     - FreshRSS resolves feed hosts with its own DNS lookup and pins the result, so an `extra_hosts` override does not help
     - `apps/freshrss` allows exactly this host with `INTERNAL_HOST_ALLOWLIST: rsshub:1200`
-- For browser-rendered feeds, set the feed's timeout to 60s in FreshRSS (default 20s; an uncached Kaggle fetch takes 6-12s)
+- For browser-rendered feeds, set the feed's timeout to 60s in FreshRSS (feed settings, advanced). FreshRSS's global default is 30s, and a browser route may spend up to 30s rendering on top of launching Chromium
 
 ## Adding a route
 
@@ -29,4 +29,4 @@ Deploy is needed only when routes, the Dockerfile or the compose file change, no
 
 | Route | Source | Notes |
 |---|---|---|
-| `/kaggle/competitions` | kaggle.com/competitions (client-side rendered) | No pubDate; new competitions arrive as new items by link |
+| `/kaggle/competitions` | kaggle.com/competitions (client-side rendered) | Sample route. No pubDate; new competitions arrive as new items by link. Team counts left out |

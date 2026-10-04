@@ -1,6 +1,6 @@
 # Coolify joins every service to the shared `coolify` network so FreshRSS can
-# reach the feed at http://rsshub:1200, and service names resolve there across
-# apps: keep them unique.
+# reach the feed at http://rsshub:1200. Service names resolve there across apps,
+# so the helpers carry the rsshub- prefix; `rsshub` itself is this app's name.
 services:
   rsshub:
     build: .
@@ -25,3 +25,4 @@ services:
   rsshub-redis:
     image: redis:alpine
     restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
