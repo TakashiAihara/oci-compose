@@ -1,0 +1,48 @@
+# Hermes Agent の chat 基盤。Slack は App 作成とトークン発行が画面操作でしか
+# できず委任できないので、ボットを API で作れる自前ホームサーバーに寄せた。
+# tuwunel は conduwuit の公式後継 (Rust / RocksDB 単体) で、Synapse + Postgres
+# より常駐メモリが小さい。
+services:
+  tuwunel:
+    image: ghcr.io/matrix-construct/tuwunel:latest
+    restart: unless-stopped
+    # 起動直後の DB migration を SIGKILL で中断させない (upstream docs の指定)
+    stop_grace_period: 30m
+    expose:
+      - "6167"
+    environment:
+      TUWUNEL_SERVER_NAME: matrix.takashiaihara.site
+      TUWUNEL_ADDRESS: 0.0.0.0
+      TUWUNEL_PORT: "6167"
+      TUWUNEL_DATABASE_PATH: /var/lib/tuwunel
+      # 自宅からしか届かない (NSG home-only) ので federation は張れないし要らない
+      TUWUNEL_ALLOW_FEDERATION: "false"
+      TUWUNEL_TRUSTED_SERVERS: "[]"
+      # 登録は閉じ、アカウントは /_synapse/admin/v1/register (HMAC) でだけ作る
+      TUWUNEL_ALLOW_REGISTRATION: "false"
+      TUWUNEL_REGISTRATION_SHARED_SECRET: ${TUWUNEL_REGISTRATION_SHARED_SECRET}
+    volumes:
+      - tuwunel-db:/var/lib/tuwunel
+    networks:
+      - default
+      - hermes-matrix
+    labels:
+      - "traefik.http.services.tuwunel.loadbalancer.server.port=6167"
+    ulimits:
+      nofile:
+        soft: 1048567
+        hard: 1048567
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  tuwunel-db:
+
+# apps/hermes-oauth の 3 インスタンスは共有 coolify network に繋がないので、
+# ホームサーバーにだけ届く専用 network を外部に作って両方から参加する。
+# 作成は oi1 で 1 回: sudo docker network create hermes-matrix
+networks:
+  hermes-matrix:
+    external: true

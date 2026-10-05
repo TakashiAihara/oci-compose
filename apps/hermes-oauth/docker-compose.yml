@@ -1,6 +1,7 @@
 # OAuth 直結の 3 インスタンス。9router を経由しないので共有 coolify network に
 # 繋がない (connect_to_docker_network = false)。同居する 40 コンテナへの
-# 横移動経路を作らないための分離で、Slack は Socket Mode の outbound のみ。
+# 横移動経路を作らないための分離。chat は Matrix (apps/matrix) で、届く先は
+# tuwunel だけが居る専用 network hermes-matrix に限る。
 services:
   hermes-codex:
     # ask_codex + repo_vault。ChatGPT / Codex サブスクリプションに OAuth で直結。
@@ -9,6 +10,9 @@ services:
     volumes:
       - hermes-codex-data:/opt/data
     command: ["gateway", "run"]
+    networks:
+      - default
+      - hermes-matrix
     deploy:
       resources:
         limits:
@@ -21,6 +25,9 @@ services:
     volumes:
       - hermes-claude-data:/opt/data
     command: ["gateway", "run"]
+    networks:
+      - default
+      - hermes-matrix
     deploy:
       resources:
         limits:
@@ -34,6 +41,9 @@ services:
     volumes:
       - hermes-modal-data:/opt/data
     command: ["gateway", "run"]
+    networks:
+      - default
+      - hermes-matrix
     deploy:
       resources:
         limits:
@@ -43,3 +53,7 @@ volumes:
   hermes-codex-data:
   hermes-claude-data:
   hermes-modal-data:
+
+networks:
+  hermes-matrix:
+    external: true
