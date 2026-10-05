@@ -19,6 +19,10 @@ services:
       # smtp_tls_security_level=encrypt は維持されるので平文化の影響は外に出ない。
       POSTFIX_smtpd_tls_security_level: none
       HOSTNAME: smtp.takashiaihara.site
+      # coolify network は IPv6 も持つ (ULA)。既定の mynetworks は IPv4 の private 帯だけなので、
+      # IPv6 で繋いできたクライアント (Node 製の kaneo は v4/v6 のどちらで繋ぐかが毎回変わる) が
+      # `Client host rejected: Access denied` で落ちる。ULA 全体 (fd00::/8) を足す
+      POSTFIX_mynetworks: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,[::1]/128,[fd00::]/8"
     healthcheck:
       # /dev/tcp は bash 拡張。CMD-SHELL (= /bin/sh = dash) では常に失敗するので bash を明示する
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/587"]
