@@ -30,8 +30,16 @@ services:
       - ntfy-auth:/var/lib/ntfy/auth
       - ntfy-cache:/var/cache/ntfy
       - ntfy-attachments:/var/lib/ntfy/attachments
+    networks:
+      - default
+      # coolify network に入らない apps/hermes-oauth から healthcheck の通知を受けるため
+      - hermes-alerts
 
 volumes:
   ntfy-auth:
   ntfy-cache:
   ntfy-attachments:
+
+networks:
+  hermes-alerts:
+    external: true

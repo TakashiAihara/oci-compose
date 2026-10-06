@@ -7,12 +7,23 @@ services:
     # ask_codex + repo_vault。ChatGPT / Codex サブスクリプションに OAuth で直結。
     image: nousresearch/hermes-agent:latest
     restart: unless-stopped
+    environment:
+      HERMES_INSTANCE: hermes-codex
     volumes:
       - hermes-codex-data:/opt/data
+      - ./healthcheck.py:/opt/healthcheck.py:ro
     command: ["gateway", "run"]
+    healthcheck:
+      # 設定した platform が今の gateway で connected か。異常 / 回復は ntfy の hermes-alerts へ
+      test: ["CMD", "python3", "/opt/healthcheck.py"]
+      interval: 60s
+      timeout: 20s
+      retries: 2
+      start_period: 15m
     networks:
       - default
       - hermes-matrix
+      - hermes-alerts
     deploy:
       resources:
         limits:
@@ -22,12 +33,23 @@ services:
     # ask_claude + repo_vault。anthropic provider に CLAUDE_CODE_OAUTH_TOKEN で直結。
     image: nousresearch/hermes-agent:latest
     restart: unless-stopped
+    environment:
+      HERMES_INSTANCE: hermes-claude
     volumes:
       - hermes-claude-data:/opt/data
+      - ./healthcheck.py:/opt/healthcheck.py:ro
     command: ["gateway", "run"]
+    healthcheck:
+      # 設定した platform が今の gateway で connected か。異常 / 回復は ntfy の hermes-alerts へ
+      test: ["CMD", "python3", "/opt/healthcheck.py"]
+      interval: 60s
+      timeout: 20s
+      retries: 2
+      start_period: 15m
     networks:
       - default
       - hermes-matrix
+      - hermes-alerts
     deploy:
       resources:
         limits:
@@ -38,12 +60,23 @@ services:
     # 学習に使う経路が無い。scale-to-zero のため初回応答に 19 秒前後かかる。
     image: nousresearch/hermes-agent:latest
     restart: unless-stopped
+    environment:
+      HERMES_INSTANCE: hermes-modal
     volumes:
       - hermes-modal-data:/opt/data
+      - ./healthcheck.py:/opt/healthcheck.py:ro
     command: ["gateway", "run"]
+    healthcheck:
+      # 設定した platform が今の gateway で connected か。異常 / 回復は ntfy の hermes-alerts へ
+      test: ["CMD", "python3", "/opt/healthcheck.py"]
+      interval: 60s
+      timeout: 20s
+      retries: 2
+      start_period: 15m
     networks:
       - default
       - hermes-matrix
+      - hermes-alerts
     deploy:
       resources:
         limits:
@@ -56,4 +89,7 @@ volumes:
 
 networks:
   hermes-matrix:
+    external: true
+  # healthcheck の通知先 ntfy にだけ届く network。作成は oi1 で 1 回: sudo docker network create hermes-alerts
+  hermes-alerts:
     external: true
