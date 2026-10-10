@@ -1,13 +1,36 @@
 # Image search for taba (collectors/searxng-bing). Only the gate is published: SearXNG has no auth of its own, so the
 # gate refuses every request without the bearer token (Infisical home/prod SEARXNG_TOKEN).
+# The config files are written by the entrypoint because Coolify does not copy repo files for `./file` bind mounts
+# (it creates an empty directory in their place).
 services:
   searxng:
     image: searxng/searxng:latest
     restart: unless-stopped
     environment:
       SEARXNG_SECRET: ${SEARXNG_SECRET:?set in Coolify env}
-    volumes:
-      - ./settings.yml:/etc/searxng/settings.yml:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cat > /etc/searxng/settings.yml <<'YAML'
+        # Only bing images: DuckDuckGo images answers non-browser clients with botnet_challenge and silently returns
+        # 0 results (vault claude-code-web-search-extension.md, 2026-10-10).
+        use_default_settings:
+          engines:
+            keep_only:
+              - bing images
+        server:
+          # Replaced by the SEARXNG_SECRET env.
+          secret_key: "unused"
+          limiter: false
+          image_proxy: false
+        search:
+          safe_search: 0
+          formats:
+            - html
+            - json
+        YAML
+        exec /usr/local/searxng/entrypoint.sh
     deploy:
       resources:
         limits:
@@ -22,8 +45,29 @@ services:
       - "8080"
     environment:
       SEARXNG_TOKEN: ${SEARXNG_TOKEN:?set in Coolify env}
-    volumes:
-      - ./gate.conf.template:/etc/nginx/templates/default.conf.template:ro
+    # The image runs envsubst on templates with the variables that are set, so only $${SEARXNG_TOKEN} is replaced.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /etc/nginx/templates
+        cat > /etc/nginx/templates/default.conf.template <<'CONF'
+        server {
+            listen 8080;
+            location / {
+                if ($$http_authorization != "Bearer $${SEARXNG_TOKEN}") {
+                    return 401;
+                }
+                proxy_set_header Authorization "";
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_pass http://searxng:8080;
+            }
+        }
+        CONF
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
+    entrypoint: []
     deploy:
       resources:
         limits:
