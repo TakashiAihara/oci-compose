@@ -1,5 +1,5 @@
 # Image search for taba (collectors/searxng-bing). Only the gate is published: SearXNG has no auth of its own, so the
-# gate refuses every request without the bearer token (Infisical home/prod SEARXNG_TOKEN).
+# gate refuses every request whose X-Taba-Token header is not the token (Infisical home/prod SEARXNG_TOKEN).
 # The config files are written by the entrypoint because Coolify does not copy repo files for `./file` bind mounts
 # (it creates an empty directory in their place).
 services:
@@ -55,10 +55,10 @@ services:
         server {
             listen 8080;
             location / {
-                if ($$http_authorization != "Bearer $${SEARXNG_TOKEN}") {
+                if ($$http_x_taba_token != "$${SEARXNG_TOKEN}") {
                     return 401;
                 }
-                proxy_set_header Authorization "";
+                proxy_set_header X-Taba-Token "";
                 proxy_set_header Host $$host;
                 proxy_set_header X-Real-IP $$remote_addr;
                 proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
