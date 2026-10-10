@@ -1,0 +1,30 @@
+# Image search for taba (collectors/searxng-bing). Only the gate is published: SearXNG has no auth of its own, so the
+# gate refuses every request without the bearer token (Infisical home/prod SEARXNG_TOKEN).
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set in Coolify env}
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  searxng-gate:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - searxng
+    expose:
+      - "8080"
+    environment:
+      SEARXNG_TOKEN: ${SEARXNG_TOKEN:?set in Coolify env}
+    volumes:
+      - ./gate.conf.template:/etc/nginx/templates/default.conf.template:ro
+    deploy:
+      resources:
+        limits:
+          memory: 64M

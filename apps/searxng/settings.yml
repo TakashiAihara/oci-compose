@@ -1,0 +1,16 @@
+# Only bing images: DuckDuckGo images answers non-browser clients with botnet_challenge and silently returns 0 results
+# (vault claude-code-web-search-extension.md, 2026-10-10).
+use_default_settings:
+  engines:
+    keep_only:
+      - bing images
+server:
+  # Replaced by the SEARXNG_SECRET env.
+  secret_key: "unused"
+  limiter: false
+  image_proxy: false
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
