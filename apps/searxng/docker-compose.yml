@@ -46,7 +46,7 @@ services:
     environment:
       SEARXNG_TOKEN: ${SEARXNG_TOKEN:?set in Coolify env}
     # The image runs envsubst on templates with the variables that are set, so only $${SEARXNG_TOKEN} is replaced.
-    command:
+    entrypoint:
       - /bin/sh
       - -c
       - |
@@ -67,7 +67,6 @@ services:
         }
         CONF
         exec /docker-entrypoint.sh nginx -g 'daemon off;'
-    entrypoint: []
     deploy:
       resources:
         limits:
