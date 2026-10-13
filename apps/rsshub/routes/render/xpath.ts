@@ -7,8 +7,10 @@ import logger from '@/utils/logger';
 import { parseDate } from '@/utils/parse-date';
 import { getPlaywrightPage } from '@/utils/playwright';
 
-/** One budget for launch, goto and the wait, the same shape as the kaggle route. */
+/** One budget for goto and the waits. Chromium's launch comes on top: the goto timeout is computed before the browser exists. */
 const RENDER_TIMEOUT = 30000;
+/** A gap this long with no new `item` match is read as the list having finished painting, as in the kaggle route. */
+const SETTLE_MS = 1500;
 /** Playwright reads `timeout: 0` as "wait forever", so it never floors at zero. */
 const budgetLeft = (deadline: number): number => Math.max(deadline - Date.now(), 1);
 
@@ -70,28 +72,66 @@ export const handler = async (ctx: Context): Promise<Data> => {
     });
     try {
         try {
-            await page.waitForFunction((xpath: string) => document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue !== null, item, {
-                polling: 200,
-                timeout: budgetLeft(deadline),
-            });
+            // The first match alone would cut a list that is still being appended, so this waits for the count to stop moving.
+            await page.waitForFunction(
+                ([xpath, quietMs]: [string, number]) => {
+                    const pageState = window as Window & { renderMatches?: { count: number; changedAt: number } };
+                    const count = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength;
+                    const now = performance.now();
+                    const seen = pageState.renderMatches;
+                    if (seen === undefined || seen.count !== count) {
+                        pageState.renderMatches = { count, changedAt: now };
+                        return false;
+                    }
+                    return count > 0 && now - seen.changedAt >= quietMs;
+                },
+                [item, SETTLE_MS] as [string, number],
+                { polling: 200, timeout: budgetLeft(deadline) }
+            );
         } catch (error) {
             // A crashed browser or a bad XPath is not a slow page, so only a timeout falls through to the empty check below.
             if (!(error instanceof Error && error.name === 'TimeoutError')) {
                 throw error;
             }
-            logger.warn(`render: ${url} showed no ${item} within ${RENDER_TIMEOUT}ms`);
+            logger.warn(`render: ${url} did not settle on ${item} within the render budget`);
         }
         const extracted = await page.evaluate(extract, rules);
         const pageTitle = await page.title();
         if (extracted.length === 0) {
             throw new Error(`render: ${url} rendered no node for item=${item}`);
         }
-        const items: DataItem[] = extracted.map((entry) => ({
-            title: entry.title,
-            link: entry.link ? new URL(entry.link.trim(), url).href : undefined,
-            description: entry.description ?? undefined,
-            pubDate: entry.pubDate ? parseDate(entry.pubDate.trim()) : undefined,
-        }));
+        const items: DataItem[] = [];
+        const links = new Set<string>();
+        for (const entry of extracted) {
+            // A malformed href or a javascript:/mailto: link drops only that item's link, not the feed.
+            let link: string | undefined;
+            try {
+                link = entry.link ? new URL(entry.link.trim(), url).href : undefined;
+            } catch {
+                link = undefined;
+            }
+            if (link !== undefined && !/^https?:/.test(link)) {
+                link = undefined;
+            }
+            // Readers deduplicate by link anyway; two cards pointing at one page would show as one item twice.
+            if (link !== undefined) {
+                if (links.has(link)) {
+                    continue;
+                }
+                links.add(link);
+            }
+            const pubDate = entry.pubDate ? parseDate(entry.pubDate.trim()) : undefined;
+            items.push({
+                title: entry.title,
+                link,
+                description: entry.description ?? undefined,
+                pubDate: pubDate && !Number.isNaN(pubDate.getTime()) ? pubDate : undefined,
+            });
+        }
+        // Every title empty means itemTitle points at nothing; publishing that would look like a working feed.
+        if (items.every((entry) => !entry.title)) {
+            throw new Error(`render: itemTitle=${rules.itemTitle} gave no text on any of the ${items.length} items`);
+        }
         return {
             title: params.get('title') || pageTitle,
             link: url,
@@ -108,8 +148,11 @@ export const route: Route = {
     name: 'Rendered page, read with XPath',
     maintainers: ['TakashiAihara'],
     handler,
-    example: '/render/xpath/https%3A%2F%2Fwww.kaggle.com%2Fcompetitions/item=%2F%2Fa%5Bstarts-with(%40href%2C%22%2Fcompetitions%2F%22)%5D',
-    parameters: { url: '`encodeURIComponent`ed URL of the page', routeParams: 'Rules in query-string form, URL encoded' },
+    example: '/render/xpath/https%3A%2F%2Fdime.jp%2F/item%3D%252F%252Fa%255Bcontains(%2540class%252C\'summary_link\')%255D%26itemTitle%3D.%252F%252Fh3',
+    parameters: {
+        url: '`encodeURIComponent`ed URL of the page',
+        routeParams: 'A query string whose values are each `encodeURIComponent`ed, then the whole string `encodeURIComponent`ed again. The segment is decoded twice, so a single encoding turns `+` into a space',
+    },
     description: `Opens the page in Chromium, waits until \`item\` matches, and reads every match as a feed item. For pages that a plain HTTP client gets empty because they render client-side; \`/rsshub/transform/html\` covers the rest.
 
 | Key | Meaning | Default |
@@ -121,7 +164,7 @@ export const route: Route = {
 | \`itemPubDate\` | XPath relative to the item; parsed as a date | none |
 | \`title\` | Feed title | the page's \`<title>\` |
 
-Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve against \`url\`.`,
+Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve against \`url\`; links that are not http(s) are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
     categories: ['other'],
     features: {
         requireConfig: [{ name: 'ALLOW_USER_SUPPLY_UNSAFE_DOMAIN', description: '' }],

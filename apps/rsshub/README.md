@@ -34,7 +34,7 @@ Deploy is needed only when routes, the Dockerfile or the compose file change, no
 
 ## Feeds built on `/render/xpath`
 
-Build the URL with `encodeURIComponent(url)` and `encodeURIComponent(routeParams)`, where routeParams is a plain query string such as `item=//a&itemTitle=.//h3`.
+The path is `/render/xpath/<encodeURIComponent(url)>/<encodeURIComponent(routeParams)>`, where routeParams is a query string whose values are each already `encodeURIComponent`ed (`item=<enc(xpath)>&itemTitle=<enc(xpath)>`). The segment is decoded twice, so encoding only once turns a `+` in an XPath into a space. The table shows the values before either encoding.
 
 | Feed | Page | routeParams (before encoding) |
 |---|---|---|
