@@ -8,6 +8,9 @@ services:
     environment:
       CACHE_TYPE: redis
       REDIS_URL: redis://rsshub-redis:6379/
+      # Routes that fetch a URL from the subscription (/render/xpath, upstream /rsshub/transform/*).
+      # The instance is reachable from the home IP and the coolify network only.
+      ALLOW_USER_SUPPLY_UNSAFE_DOMAIN: "true"
     depends_on:
       - rsshub-redis
     healthcheck:
