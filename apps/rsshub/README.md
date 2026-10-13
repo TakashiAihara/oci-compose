@@ -30,3 +30,12 @@ Deploy is needed only when routes, the Dockerfile or the compose file change, no
 | Route | Source | Notes |
 |---|---|---|
 | `/kaggle/competitions` | kaggle.com/competitions (client-side rendered) | Sample route. No pubDate; new competitions arrive as new items by link. Team counts left out |
+| `/render/xpath/:url/:routeParams` | Any page, rendered in Chromium | Rules are XPath; keys and defaults are in the route's description. Needs `ALLOW_USER_SUPPLY_UNSAFE_DOMAIN` (set in the compose file) |
+
+## Feeds built on `/render/xpath`
+
+Build the URL with `encodeURIComponent(url)` and `encodeURIComponent(routeParams)`, where routeParams is a plain query string such as `item=//a&itemTitle=.//h3`.
+
+| Feed | Page | routeParams (before encoding) |
+|---|---|---|
+| DIME 最新記事 | `https://dime.jp/` | `item=//section[contains(@class,'listBlock-latest')]//a[contains(@class,'summary_link')]&itemTitle=.//h3&itemDesc=.//div[contains(@class,'summary_cat')]&itemPubDate=.//div[contains(@class,'summary_date')]&title=DIME 最新記事` |
