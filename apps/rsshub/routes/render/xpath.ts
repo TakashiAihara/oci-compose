@@ -61,8 +61,9 @@ export const handler = async (ctx: Context): Promise<Data> => {
         item,
         itemTitle: params.get('itemTitle') || '.',
         itemLink: params.get('itemLink') || '(./@href | .//a/@href)[1]',
-        itemDesc: params.get('itemDesc'),
-        itemPubDate: params.get('itemPubDate'),
+        // `itemDesc=` with no value means "none", not an empty XPath, which document.evaluate rejects.
+        itemDesc: params.get('itemDesc') || null,
+        itemPubDate: params.get('itemPubDate') || null,
     };
 
     const deadline = Date.now() + RENDER_TIMEOUT;
@@ -97,6 +98,8 @@ export const handler = async (ctx: Context): Promise<Data> => {
         }
         const extracted = await page.evaluate(extract, rules);
         const pageTitle = await page.title();
+        // Relative links resolve where the page ended up after redirects, not where it was asked for.
+        const base = page.url();
         if (extracted.length === 0) {
             throw new Error(`render: ${url} rendered no node for item=${item}`);
         }
@@ -106,7 +109,7 @@ export const handler = async (ctx: Context): Promise<Data> => {
             // A malformed href or a javascript:/mailto: link drops only that item's link, not the feed.
             let link: string | undefined;
             try {
-                link = entry.link ? new URL(entry.link.trim(), url).href : undefined;
+                link = entry.link ? new URL(entry.link.trim(), base).href : undefined;
             } catch {
                 link = undefined;
             }
@@ -164,7 +167,7 @@ export const route: Route = {
 | \`itemPubDate\` | XPath relative to the item; parsed as a date | none |
 | \`title\` | Feed title | the page's \`<title>\` |
 
-Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve against \`url\`; links that are not http(s) are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
+Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve against the page's final URL after redirects; links that are not http(s) are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
     categories: ['other'],
     features: {
         requireConfig: [{ name: 'ALLOW_USER_SUPPLY_UNSAFE_DOMAIN', description: '' }],
