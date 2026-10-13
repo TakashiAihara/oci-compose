@@ -11,6 +11,9 @@ services:
       # Routes that fetch a URL from the subscription (/render/xpath, upstream /rsshub/transform/*).
       # The instance is reachable from the home IP and the coolify network only.
       ALLOW_USER_SUPPLY_UNSAFE_DOMAIN: "true"
+      # Node sizes the heap to about half the 2g limit (1120MiB measured). A single heavy
+      # route (/transformer-circuits) ran it out and took every route down until restart.
+      NODE_OPTIONS: --max-old-space-size=1536
     depends_on:
       - rsshub-redis
     healthcheck:
