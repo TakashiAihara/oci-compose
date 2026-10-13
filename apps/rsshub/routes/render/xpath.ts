@@ -76,12 +76,12 @@ export const handler = async (ctx: Context): Promise<Data> => {
             // The first match alone would cut a list that is still being appended, so this waits for the count to stop moving.
             await page.waitForFunction(
                 ([xpath, quietMs]: [string, number]) => {
-                    const pageState = window as Window & { renderMatches?: { count: number; changedAt: number } };
+                    const pageState = window as Window & { rsshubRenderMatches?: { count: number; changedAt: number } };
                     const count = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength;
                     const now = performance.now();
-                    const seen = pageState.renderMatches;
+                    const seen = pageState.rsshubRenderMatches;
                     if (seen === undefined || seen.count !== count) {
-                        pageState.renderMatches = { count, changedAt: now };
+                        pageState.rsshubRenderMatches = { count, changedAt: now };
                         return false;
                     }
                     return count > 0 && now - seen.changedAt >= quietMs;
@@ -98,14 +98,18 @@ export const handler = async (ctx: Context): Promise<Data> => {
         }
         const extracted = await page.evaluate(extract, rules);
         const pageTitle = await page.title();
-        // Relative links resolve where the page ended up after redirects, not where it was asked for.
-        const base = page.url();
+        // Relative links resolve as the page itself resolves them: after redirects, and against any <base href>.
+        const base = await page.evaluate(() => document.baseURI);
         if (extracted.length === 0) {
             throw new Error(`render: ${url} rendered no node for item=${item}`);
         }
         const items: DataItem[] = [];
         const links = new Set<string>();
         for (const entry of extracted) {
+            // An item with no title is unreadable in a reader, and keeping it would let it claim a link before a titled duplicate.
+            if (!entry.title) {
+                continue;
+            }
             // A malformed href or a javascript:/mailto: link drops only that item's link, not the feed.
             let link: string | undefined;
             try {
@@ -131,9 +135,9 @@ export const handler = async (ctx: Context): Promise<Data> => {
                 pubDate: pubDate && !Number.isNaN(pubDate.getTime()) ? pubDate : undefined,
             });
         }
-        // Every title empty means itemTitle points at nothing; publishing that would look like a working feed.
-        if (items.every((entry) => !entry.title)) {
-            throw new Error(`render: itemTitle=${rules.itemTitle} gave no text on any of the ${items.length} items`);
+        // No titled item means itemTitle points at nothing; publishing that would look like a working feed.
+        if (items.length === 0) {
+            throw new Error(`render: itemTitle=${rules.itemTitle} gave no text on any of the ${extracted.length} items`);
         }
         return {
             title: params.get('title') || pageTitle,
@@ -167,7 +171,7 @@ export const route: Route = {
 | \`itemPubDate\` | XPath relative to the item; parsed as a date | none |
 | \`title\` | Feed title | the page's \`<title>\` |
 
-Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve against the page's final URL after redirects; links that are not http(s) are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
+Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve as the page does (after redirects, honouring \`<base href>\`); links that are not http(s) are dropped, items with an empty title are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
     categories: ['other'],
     features: {
         requireConfig: [{ name: 'ALLOW_USER_SUPPLY_UNSAFE_DOMAIN', description: '' }],
