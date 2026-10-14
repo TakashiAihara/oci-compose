@@ -31,19 +31,19 @@ RUN pnpm build && pnpm prune --prod --ignore-scripts && rm -rf .git
 
 FROM node:24-trixie-slim
 ENV NODE_ENV=production TZ=Asia/Tokyo
-# Chromium (the kaggle route) and Lightpanda (/render/xpath) run inside this container: a separate
-# browser service would expose an unauthenticated CDP port on Coolify's shared network.
-ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+# Lightpanda runs inside this container as a child process of the route: a separate browser service
+# would expose an unauthenticated CDP port on Coolify's shared network.
 # Lightpanda otherwise reports every run and navigation to telemetry.lightpanda.io.
 ENV LIGHTPANDA_DISABLE_TELEMETRY=true
 WORKDIR /app
 RUN apt-get update \
-    && apt-get install -yq --no-install-recommends dumb-init chromium ca-certificates \
+    && apt-get install -yq --no-install-recommends dumb-init ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app
 COPY --from=lightpanda /usr/local/bin/lightpanda /usr/local/bin/lightpanda
-# The version check in its own stage ran on the full image; this one runs where the route does.
-RUN lightpanda version
+# Renders a page and runs its script where the route will, not just the CLI: the check in the download
+# stage ran on the full image. A data: URL keeps the build off the network.
+RUN lightpanda fetch 'data:text/html,<p id=x>ok</p>' --dump html --wait-script 'document.getElementById("x")!==null' --wait-ms 5000 > /dev/null
 EXPOSE 1200
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "--max-http-header-size=32768", "dist/index.mjs"]
