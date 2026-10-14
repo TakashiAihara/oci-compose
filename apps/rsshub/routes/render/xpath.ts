@@ -94,21 +94,23 @@ const render = async (url: string, item: string): Promise<FetchResult> => {
         String(RENDER_TIMEOUT + TERMINATE_GRACE),
     ];
     let stdout: string;
+    let killedBy = '0';
     try {
         ({ stdout } = await execFileAsync(LIGHTPANDA, args, { timeout: RENDER_TIMEOUT + 10000, maxBuffer: 64 * 1024 * 1024 }));
     } catch (error) {
         // Exit 1 also means "the wait ran out", which still leaves a dump on stdout; anything without one is a real failure.
         // The message is rebuilt, since execFile's own repeats the whole argument list, settle script included.
-        const partial = (error as { stdout?: string }).stdout;
+        const { stdout: partial, stderr, signal, code } = error as { stdout?: string; stderr?: string; signal?: string | null; code?: unknown };
+        killedBy = String(signal ?? code);
         if (!partial) {
-            throw new Error(`render: lightpanda failed on ${url}: ${(error as { code?: unknown; signal?: unknown }).signal ?? (error as { code?: unknown }).code}`);
+            throw new Error(`render: lightpanda failed on ${url} (${killedBy}): ${(stderr ?? '').trim().split('\n').slice(-3).join(' | ')}`);
         }
         stdout = partial;
     }
     try {
         return JSON.parse(stdout) as FetchResult;
     } catch {
-        throw new Error(`render: lightpanda gave no JSON for ${url} (${stdout.length} bytes, cut off or killed)`);
+        throw new Error(`render: lightpanda gave no JSON for ${url} (${stdout.length} bytes, exit ${killedBy})`);
     }
 };
 
