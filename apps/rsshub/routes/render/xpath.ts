@@ -23,9 +23,11 @@ const RENDER_TIMEOUT = 30000;
 const TERMINATE_GRACE = 2000;
 /**
  * Default for `settle`: a gap this long with no new `item` match is read as the list having finished painting.
- * Each feed can shorten it; a page that paints in steps can be cut short by a gap shorter than its steps.
+ * Each feed can change it; a page that paints in steps can be cut short by a gap shorter than its steps.
  */
 const SETTLE_MS = 1500;
+/** The page load and the settle share RENDER_TIMEOUT, so a settle near it would never be reached; half is left for the load. */
+const SETTLE_MAX_MS = RENDER_TIMEOUT / 2;
 
 type Rules = { item: string; itemTitle: string; itemLink: string; itemDesc: string | null; itemPubDate: string | null };
 type Extracted = { title: string; link: string | null; description: string | null; pubDate: string | null };
@@ -140,9 +142,13 @@ export const handler = async (ctx: Context): Promise<Data> => {
         itemPubDate: params.get('itemPubDate') || null,
     };
     const settleParam = params.get('settle');
+    // Digits only: Number() would read " ", "0x10" and "1e3" as numbers, the first of them as 0, the shortest wait.
+    if (settleParam && !/^\d+$/.test(settleParam)) {
+        throw new Error(`render: settle must be whole milliseconds from 0 to ${SETTLE_MAX_MS}, got ${settleParam}`);
+    }
     const settleMs = settleParam ? Number(settleParam) : SETTLE_MS;
-    if (!Number.isInteger(settleMs) || settleMs < 0 || settleMs >= RENDER_TIMEOUT) {
-        throw new Error(`render: settle must be whole milliseconds from 0 to ${RENDER_TIMEOUT - 1}, got ${settleParam}`);
+    if (settleMs > SETTLE_MAX_MS) {
+        throw new Error(`render: settle must be whole milliseconds from 0 to ${SETTLE_MAX_MS}, got ${settleParam}`);
     }
     // A bad XPath would otherwise only surface as a wait that never succeeds, 30 seconds later.
     const probe = new JSDOM('').window;
@@ -249,7 +255,7 @@ export const route: Route = {
 | \`itemDesc\` | XPath relative to the item; an element gives its inner HTML | none |
 | \`itemPubDate\` | XPath relative to the item; parsed as a date | none |
 | \`title\` | Feed title | the page's \`<title>\` |
-| \`settle\` | Milliseconds with no change in the number of \`item\` matches before the page is read as finished. Shorter is faster but can cut off a list that paints in steps | \`1500\` |
+| \`settle\` | Milliseconds with no change in the number of \`item\` matches before the page is read as finished, 0 to 15000. Shorter is faster but can cut off a list that paints in steps | \`1500\` |
 
 Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve as the page does (after redirects, honouring \`<base href>\`); links that are not http(s) are dropped, items with an empty title are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
     categories: ['other'],

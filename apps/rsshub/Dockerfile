@@ -41,8 +41,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app
 COPY --from=lightpanda /usr/local/bin/lightpanda /usr/local/bin/lightpanda
-# The version check in its own stage ran on the full image; this one runs where the route does.
-RUN lightpanda version
+# Renders a page and runs its script where the route will, not just the CLI: the check in the download
+# stage ran on the full image. A data: URL keeps the build off the network.
+RUN lightpanda fetch 'data:text/html,<p id=x>ok</p>' --dump html --wait-script 'document.getElementById("x")!==null' --wait-ms 5000 > /dev/null
 EXPOSE 1200
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "--max-http-header-size=32768", "dist/index.mjs"]
