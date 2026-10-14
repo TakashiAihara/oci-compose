@@ -38,3 +38,4 @@ The path is `/render/xpath/<encodeURIComponent(url)>/<encodeURIComponent(routePa
 | Feed | Page | routeParams (before encoding) |
 |---|---|---|
 | DIME 最新記事 | `https://dime.jp/` | `item=//section[contains(@class,'listBlock-latest')]//a[contains(@class,'summary_link')]&itemTitle=.//h3&itemDesc=.//div[contains(@class,'summary_cat')]&itemPubDate=.//div[contains(@class,'summary_date')]&title=DIME 最新記事` |
+| NVIDIA build models (newest first, 24 cards; no dates, the page keeps them only in its script payload) | `https://build.nvidia.com/models` | `item=//li[.//a[@data-nvtrack-nav-object='artifact-card']]&itemTitle=.//h3&itemLink=.//h3/a/@href&itemDesc=.//span[contains(@class,'line-clamp-2')]&title=NVIDIA build models` |
