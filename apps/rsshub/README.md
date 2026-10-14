@@ -1,6 +1,6 @@
 # rsshub
 
-RSSHub built from upstream master with this directory's own routes, plus Chromium for routes that need a browser to render the page.
+RSSHub built from upstream master with this directory's own routes, plus two headless browsers for pages rendered client-side: Chromium for the kaggle route, and Lightpanda (about 160MiB RSS per render, where Chromium took 726MiB PSS) for `/render/xpath`.
 
 ## URLs
 
@@ -9,7 +9,7 @@ RSSHub built from upstream master with this directory's own routes, plus Chromiu
     - oi1 cannot hairpin to its own public IP, so FreshRSS cannot fetch the public name
     - FreshRSS resolves feed hosts with its own DNS lookup and pins the result, so an `extra_hosts` override does not help
     - `apps/freshrss` allows exactly this host with `INTERNAL_HOST_ALLOWLIST: rsshub:1200`
-- For browser-rendered feeds, set the feed's timeout to 60s in FreshRSS (feed settings, advanced). FreshRSS's global default is 30s, and a browser route may spend up to 30s rendering on top of launching Chromium
+- For browser-rendered feeds, set the feed's timeout to 60s in FreshRSS (feed settings, advanced). FreshRSS's global default is 30s, and a browser route may spend up to 30s rendering on top of starting the browser. A `/render/xpath` feed that settles takes a few seconds; one whose `item` never matches runs the full 30s before failing
 
 ## Adding a route
 
@@ -30,7 +30,7 @@ Deploy is needed only when routes, the Dockerfile or the compose file change, no
 | Route | Source | Notes |
 |---|---|---|
 | `/kaggle/competitions` | kaggle.com/competitions (client-side rendered) | Sample route. No pubDate; new competitions arrive as new items by link. Team counts left out |
-| `/render/xpath/:url/:routeParams` | Any page, rendered in Chromium | Rules are XPath; keys and defaults are in the route's description. Needs `ALLOW_USER_SUPPLY_UNSAFE_DOMAIN` (set in the compose file) |
+| `/render/xpath/:url/:routeParams` | Any page, rendered in Lightpanda | Rules are XPath; keys and defaults are in the route's description. Needs `ALLOW_USER_SUPPLY_UNSAFE_DOMAIN` (set in the compose file). Requests to private and internal addresses are blocked |
 
 ## Feeds built on `/render/xpath`
 

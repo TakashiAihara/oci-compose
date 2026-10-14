@@ -1,27 +1,53 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
 import type { Context } from 'hono';
+import { JSDOM } from 'jsdom';
 
 import { config } from '@/config';
 import ConfigNotFoundError from '@/errors/types/config-not-found';
 import type { Data, DataItem, Route } from '@/types';
 import logger from '@/utils/logger';
 import { parseDate } from '@/utils/parse-date';
-import { getPlaywrightPage } from '@/utils/playwright';
 
-/** One budget for goto and the waits. Chromium's launch comes on top: the goto timeout is computed before the browser exists. */
+const execFileAsync = promisify(execFile);
+
+/**
+ * Lightpanda, not Chromium: it renders the same client-side pages (37 kaggle competition links against
+ * Chromium's 36) in about 160MiB RSS, where Chromium took 726MiB PSS (2026-10-14, vault PR #991).
+ */
+const LIGHTPANDA = 'lightpanda';
+/** Budget for the page load and the settle wait together. */
 const RENDER_TIMEOUT = 30000;
+/** The page's scripts are stopped this long after the wait gives up, so a run-out wait reports Timeout, not the ScriptError a shared deadline gives. */
+const TERMINATE_GRACE = 2000;
 /** A gap this long with no new `item` match is read as the list having finished painting, as in the kaggle route. */
 const SETTLE_MS = 1500;
-/** Playwright reads `timeout: 0` as "wait forever", so it never floors at zero. */
-const budgetLeft = (deadline: number): number => Math.max(deadline - Date.now(), 1);
 
 type Rules = { item: string; itemTitle: string; itemLink: string; itemDesc: string | null; itemPubDate: string | null };
 type Extracted = { title: string; link: string | null; description: string | null; pubDate: string | null };
+/** The parts of `lightpanda fetch --json` this route reads. */
+type FetchResult = { url: string; http_status: number; error: string | null; content: string | null };
 
 /**
- * Runs inside the page: XPath needs the live DOM, and `document.evaluate` is already there. It holds no
- * nested named function, since esbuild wraps those in a `__name` helper that does not exist in the page.
+ * Evaluated by Lightpanda until it returns true. The first match alone would cut a list that is still being
+ * appended, so it waits for the number of matches to stop moving.
  */
-const extract = (rules: Rules): Extracted[] => {
+const settleScript = (item: string): string =>
+    `(() => {
+        const count = document.evaluate(${JSON.stringify(item)}, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength;
+        const now = Date.now();
+        const seen = window.rsshubRenderMatches;
+        if (seen === undefined || seen.count !== count) {
+            window.rsshubRenderMatches = { count, changedAt: now };
+            return false;
+        }
+        return count > 0 && now - seen.changedAt >= ${SETTLE_MS};
+    })()`;
+
+/** Reads the rendered DOM with XPath; Lightpanda hands back markup, and jsdom gives it `document.evaluate` again. */
+const extract = (window: JSDOM['window'], rules: Rules): Extracted[] => {
+    const { document, XPathResult, Element } = window;
     const snapshot = document.evaluate(rules.item, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
     const items: Extracted[] = [];
     for (let i = 0; i < snapshot.snapshotLength; i++) {
@@ -41,6 +67,51 @@ const extract = (rules: Rules): Extracted[] => {
         items.push({ title: (title ?? '').replace(/\s+/g, ' ').trim(), link, description, pubDate });
     }
     return items;
+};
+
+const render = async (url: string, item: string): Promise<FetchResult> => {
+    const args = [
+        'fetch',
+        url,
+        '--json',
+        '--dump',
+        'html',
+        '--with-base',
+        '--strip-mode',
+        'js',
+        // A URL from the subscription must not reach the coolify network, the host or the cloud metadata service; checked after DNS, so redirects are covered too.
+        '--block-private-networks',
+        // Not private by its list, but internal in practice: carrier-grade NAT (tailnets) and the benchmarking range.
+        '--block-cidrs',
+        '100.64.0.0/10',
+        '--block-cidrs',
+        '198.18.0.0/15',
+        '--wait-script',
+        settleScript(item),
+        '--wait-ms',
+        String(RENDER_TIMEOUT),
+        '--terminate-ms',
+        String(RENDER_TIMEOUT + TERMINATE_GRACE),
+    ];
+    let stdout: string;
+    let killedBy = '0';
+    try {
+        ({ stdout } = await execFileAsync(LIGHTPANDA, args, { timeout: RENDER_TIMEOUT + 10000, maxBuffer: 64 * 1024 * 1024 }));
+    } catch (error) {
+        // Exit 1 also means "the wait ran out", which still leaves a dump on stdout; anything without one is a real failure.
+        // The message is rebuilt, since execFile's own repeats the whole argument list, settle script included.
+        const { stdout: partial, stderr, signal, code } = error as { stdout?: string; stderr?: string; signal?: string | null; code?: unknown };
+        killedBy = String(signal ?? code);
+        if (!partial) {
+            throw new Error(`render: lightpanda failed on ${url} (${killedBy}): ${(stderr ?? '').trim().split('\n').slice(-3).join(' | ')}`);
+        }
+        stdout = partial;
+    }
+    try {
+        return JSON.parse(stdout) as FetchResult;
+    } catch {
+        throw new Error(`render: lightpanda gave no JSON for ${url} (${stdout.length} bytes, exit ${killedBy})`);
+    }
 };
 
 export const handler = async (ctx: Context): Promise<Data> => {
@@ -65,89 +136,89 @@ export const handler = async (ctx: Context): Promise<Data> => {
         itemDesc: params.get('itemDesc') || null,
         itemPubDate: params.get('itemPubDate') || null,
     };
-
-    const deadline = Date.now() + RENDER_TIMEOUT;
-    const { page, destroy } = await getPlaywrightPage(url, {
-        closeTimeout: 0,
-        gotoConfig: { waitUntil: 'domcontentloaded', timeout: budgetLeft(deadline) },
-    });
+    // A bad XPath would otherwise only surface as a wait that never succeeds, 30 seconds later.
+    const probe = new JSDOM('').window;
     try {
-        try {
-            // The first match alone would cut a list that is still being appended, so this waits for the count to stop moving.
-            await page.waitForFunction(
-                ([xpath, quietMs]: [string, number]) => {
-                    const pageState = window as Window & { rsshubRenderMatches?: { count: number; changedAt: number } };
-                    const count = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength;
-                    const now = performance.now();
-                    const seen = pageState.rsshubRenderMatches;
-                    if (seen === undefined || seen.count !== count) {
-                        pageState.rsshubRenderMatches = { count, changedAt: now };
-                        return false;
-                    }
-                    return count > 0 && now - seen.changedAt >= quietMs;
-                },
-                [item, SETTLE_MS] as [string, number],
-                { polling: 200, timeout: budgetLeft(deadline) }
-            );
-        } catch (error) {
-            // A crashed browser or a bad XPath is not a slow page, so only a timeout falls through to the empty check below.
-            if (!(error instanceof Error && error.name === 'TimeoutError')) {
-                throw error;
+        for (const xpath of [rules.item, rules.itemTitle, rules.itemLink, rules.itemDesc, rules.itemPubDate]) {
+            if (xpath !== null) {
+                probe.document.createExpression(xpath);
             }
-            logger.warn(`render: ${url} did not settle on ${item} within the render budget`);
         }
-        const extracted = await page.evaluate(extract, rules);
-        const pageTitle = await page.title();
-        // Relative links resolve as the page itself resolves them: after redirects, and against any <base href>.
-        const base = await page.evaluate(() => document.baseURI);
-        if (extracted.length === 0) {
-            throw new Error(`render: ${url} rendered no node for item=${item}`);
+    } finally {
+        probe.close();
+    }
+
+    const result = await render(url, item);
+    // Status 0 is a load that never got a response (refused, blocked as private, DNS), but also a wait script
+    // that threw or returned true before the page loaded; `count > 0` in the settle script keeps the second
+    // from happening. A wait that ran out keeps its status and its dump.
+    if (result.http_status === 0 || !result.content) {
+        throw new Error(`render: ${url} did not load (${result.error ?? 'no content'})`);
+    }
+    if (result.http_status >= 400) {
+        throw new Error(`render: ${url} answered ${result.http_status}`);
+    }
+    if (result.error) {
+        logger.warn(`render: ${url} did not settle on ${item} within the render budget (${result.error}); reading what rendered`);
+    }
+
+    const { window } = new JSDOM(result.content, { url: result.url || url });
+    try {
+        return toFeed(window, rules, url, params.get('title'));
+    } finally {
+        window.close();
+    }
+};
+
+const toFeed = (window: JSDOM['window'], rules: Rules, url: string, title: string | null): Data => {
+    const extracted = extract(window, rules);
+    if (extracted.length === 0) {
+        throw new Error(`render: ${url} rendered no node for item=${rules.item}`);
+    }
+    // Relative links resolve as the page does: after redirects, and against any <base href>.
+    const base = window.document.baseURI;
+    const items: DataItem[] = [];
+    const links = new Set<string>();
+    for (const entry of extracted) {
+        // An item with no title is unreadable in a reader, and keeping it would let it claim a link before a titled duplicate.
+        if (!entry.title) {
+            continue;
         }
-        const items: DataItem[] = [];
-        const links = new Set<string>();
-        for (const entry of extracted) {
-            // An item with no title is unreadable in a reader, and keeping it would let it claim a link before a titled duplicate.
-            if (!entry.title) {
+        // A malformed href or a javascript:/mailto: link drops only that item's link, not the feed.
+        let link: string | undefined;
+        try {
+            link = entry.link ? new URL(entry.link.trim(), base).href : undefined;
+        } catch {
+            link = undefined;
+        }
+        if (link !== undefined && !/^https?:/.test(link)) {
+            link = undefined;
+        }
+        // Readers deduplicate by link anyway; two cards pointing at one page would show as one item twice.
+        if (link !== undefined) {
+            if (links.has(link)) {
                 continue;
             }
-            // A malformed href or a javascript:/mailto: link drops only that item's link, not the feed.
-            let link: string | undefined;
-            try {
-                link = entry.link ? new URL(entry.link.trim(), base).href : undefined;
-            } catch {
-                link = undefined;
-            }
-            if (link !== undefined && !/^https?:/.test(link)) {
-                link = undefined;
-            }
-            // Readers deduplicate by link anyway; two cards pointing at one page would show as one item twice.
-            if (link !== undefined) {
-                if (links.has(link)) {
-                    continue;
-                }
-                links.add(link);
-            }
-            const pubDate = entry.pubDate ? parseDate(entry.pubDate.trim()) : undefined;
-            items.push({
-                title: entry.title,
-                link,
-                description: entry.description ?? undefined,
-                pubDate: pubDate && !Number.isNaN(pubDate.getTime()) ? pubDate : undefined,
-            });
+            links.add(link);
         }
-        // No titled item means itemTitle points at nothing; publishing that would look like a working feed.
-        if (items.length === 0) {
-            throw new Error(`render: itemTitle=${rules.itemTitle} gave no text on any of the ${extracted.length} items`);
-        }
-        return {
-            title: params.get('title') || pageTitle,
-            link: url,
-            description: `Rendered ${url}`,
-            item: items,
-        };
-    } finally {
-        await destroy();
+        const pubDate = entry.pubDate ? parseDate(entry.pubDate.trim()) : undefined;
+        items.push({
+            title: entry.title,
+            link,
+            description: entry.description ?? undefined,
+            pubDate: pubDate && !Number.isNaN(pubDate.getTime()) ? pubDate : undefined,
+        });
     }
+    // No titled item means itemTitle points at nothing; publishing that would look like a working feed.
+    if (items.length === 0) {
+        throw new Error(`render: itemTitle=${rules.itemTitle} gave no text on any of the ${extracted.length} items`);
+    }
+    return {
+        title: title || window.document.title,
+        link: url,
+        description: `Rendered ${url}`,
+        item: items,
+    };
 };
 
 export const route: Route = {
@@ -160,7 +231,7 @@ export const route: Route = {
         url: '`encodeURIComponent`ed URL of the page',
         routeParams: 'A query string whose values are each `encodeURIComponent`ed, then the whole string `encodeURIComponent`ed again. The segment is decoded twice, so a single encoding turns `+` into a space',
     },
-    description: `Opens the page in Chromium, waits until \`item\` matches, and reads every match as a feed item. For pages that a plain HTTP client gets empty because they render client-side; \`/rsshub/transform/html\` covers the rest.
+    description: `Opens the page in Lightpanda (a headless browser that runs the page's JavaScript), waits until the number of \`item\` matches stops changing, and reads every match as a feed item. Requests to private and internal addresses are blocked. For pages that a plain HTTP client gets empty because they render client-side; \`/rsshub/transform/html\` covers the rest.
 
 | Key | Meaning | Default |
 |---|---|---|
@@ -175,6 +246,6 @@ Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. 
     categories: ['other'],
     features: {
         requireConfig: [{ name: 'ALLOW_USER_SUPPLY_UNSAFE_DOMAIN', description: '' }],
-        requirePuppeteer: true,
+        requirePuppeteer: false,
     },
 };
