@@ -1,5 +1,5 @@
-# 9router を使う 2 インスタンス。coolify network に繋ぐ必要があるのはこちらだけ
-# (9router コンテナへ alias `9router` で到達するため)。OAuth 直結の 3 つは
+# 9router を使うインスタンス。coolify network に繋ぐ必要があるのはこちらだけ
+# (9router コンテナへ alias `9router` で到達するため)。OAuth 直結のものは
 # apps/hermes-oauth に分けてあり、共有ネットワークに接続していない。
 services:
   hermes:
@@ -32,28 +32,5 @@ services:
         limits:
           memory: 2g
 
-  hermes-agy:
-    # ask_agy 用。Antigravity の内蔵 provider が hermes から消えている
-    # (issue #104167 で upstream に報告済み) ため、9router の ag/* 経由が唯一の道。
-    image: nousresearch/hermes-agent:latest
-    restart: unless-stopped
-    environment:
-      HERMES_INSTANCE: hermes-agy
-    volumes:
-      - hermes-agy-data:/opt/data
-      - ./healthcheck.py:/opt/healthcheck.py:ro
-    command: ["gateway", "run"]
-    healthcheck:
-      test: ["CMD", "python3", "/opt/healthcheck.py"]
-      interval: 60s
-      timeout: 20s
-      retries: 2
-      start_period: 15m
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-
 volumes:
   hermes-data:
-  hermes-agy-data:
