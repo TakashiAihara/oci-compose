@@ -1,36 +1,13 @@
-# OAuth 直結の 3 インスタンス。9router を経由しないので共有 coolify network に
+# OAuth 直結のインスタンス。claude (anthropic) と Modal の 2 つの provider を
+# 1 本に載せ、会話ごとに /model で切り替える。9router を経由しないので共有 coolify network に
 # 繋がない (connect_to_docker_network = false)。同居する 40 コンテナへの
 # 横移動経路を作らないための分離。chat は Matrix (apps/matrix) で、届く先は
 # tuwunel だけが居る専用 network hermes-matrix に限る。
 services:
-  hermes-codex:
-    # ask_codex + repo_vault。ChatGPT / Codex サブスクリプションに OAuth で直結。
-    image: nousresearch/hermes-agent:latest
-    restart: unless-stopped
-    environment:
-      HERMES_INSTANCE: hermes-codex
-    volumes:
-      - hermes-codex-data:/opt/data
-      - ./healthcheck.py:/opt/healthcheck.py:ro
-    command: ["gateway", "run"]
-    healthcheck:
-      # 設定した platform が今の gateway で connected か。異常 / 回復は ntfy の hermes-alerts へ
-      test: ["CMD", "python3", "/opt/healthcheck.py"]
-      interval: 60s
-      timeout: 20s
-      retries: 2
-      start_period: 15m
-    networks:
-      - default
-      - hermes-matrix
-      - hermes-alerts
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-
   hermes-claude:
     # ask_claude + repo_vault。anthropic provider に CLAUDE_CODE_OAUTH_TOKEN で直結。
+    # Modal 上の open-weights (provider modalfable) も同じ config.yaml に持つ。
+    # モデル提供者が学習に使う経路が無い方を使うときは /model で切り替える。
     image: nousresearch/hermes-agent:latest
     restart: unless-stopped
     environment:
@@ -55,37 +32,8 @@ services:
         limits:
           memory: 2g
 
-  hermes-modal:
-    # ask_modal + repo_vault。Modal 上の open-weights なので、モデル提供者が
-    # 学習に使う経路が無い。scale-to-zero のため初回応答に 19 秒前後かかる。
-    image: nousresearch/hermes-agent:latest
-    restart: unless-stopped
-    environment:
-      HERMES_INSTANCE: hermes-modal
-    volumes:
-      - hermes-modal-data:/opt/data
-      - ./healthcheck.py:/opt/healthcheck.py:ro
-    command: ["gateway", "run"]
-    healthcheck:
-      # 設定した platform が今の gateway で connected か。異常 / 回復は ntfy の hermes-alerts へ
-      test: ["CMD", "python3", "/opt/healthcheck.py"]
-      interval: 60s
-      timeout: 20s
-      retries: 2
-      start_period: 15m
-    networks:
-      - default
-      - hermes-matrix
-      - hermes-alerts
-    deploy:
-      resources:
-        limits:
-          memory: 2g
-
 volumes:
-  hermes-codex-data:
   hermes-claude-data:
-  hermes-modal-data:
 
 networks:
   hermes-matrix:

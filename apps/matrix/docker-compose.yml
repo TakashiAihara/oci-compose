@@ -40,7 +40,7 @@ services:
 volumes:
   tuwunel-db:
 
-# apps/hermes-oauth の 3 インスタンスは共有 coolify network に繋がないので、
+# apps/hermes-oauth のインスタンスは共有 coolify network に繋がないので、
 # ホームサーバーにだけ届く専用 network を外部に作って両方から参加する。
 # 作成は oi1 で 1 回: sudo docker network create hermes-matrix
 networks:
