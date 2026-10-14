@@ -13,15 +13,18 @@ import { parseDate } from '@/utils/parse-date';
 const execFileAsync = promisify(execFile);
 
 /**
- * Lightpanda, not Chromium: it renders the same client-side pages (37 kaggle competition links against
- * Chromium's 36) in about 160MiB RSS, where Chromium took 726MiB PSS (2026-10-14, vault PR #991).
+ * Lightpanda, not Chromium: it rendered the same client-side page (kaggle's competition list, 37 links
+ * against Chromium's 36) in about 160MiB RSS, where Chromium took 726MiB PSS (2026-10-14, vault PR #991).
  */
 const LIGHTPANDA = 'lightpanda';
 /** Budget for the page load and the settle wait together. */
 const RENDER_TIMEOUT = 30000;
 /** The page's scripts are stopped this long after the wait gives up, so a run-out wait reports Timeout, not the ScriptError a shared deadline gives. */
 const TERMINATE_GRACE = 2000;
-/** A gap this long with no new `item` match is read as the list having finished painting, as in the kaggle route. */
+/**
+ * Default for `settle`: a gap this long with no new `item` match is read as the list having finished painting.
+ * Each feed can shorten it; a page that paints in steps can be cut short by a gap shorter than its steps.
+ */
 const SETTLE_MS = 1500;
 
 type Rules = { item: string; itemTitle: string; itemLink: string; itemDesc: string | null; itemPubDate: string | null };
@@ -33,7 +36,7 @@ type FetchResult = { url: string; http_status: number; error: string | null; con
  * Evaluated by Lightpanda until it returns true. The first match alone would cut a list that is still being
  * appended, so it waits for the number of matches to stop moving.
  */
-const settleScript = (item: string): string =>
+const settleScript = (item: string, settleMs: number): string =>
     `(() => {
         const count = document.evaluate(${JSON.stringify(item)}, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null).snapshotLength;
         const now = Date.now();
@@ -42,7 +45,7 @@ const settleScript = (item: string): string =>
             window.rsshubRenderMatches = { count, changedAt: now };
             return false;
         }
-        return count > 0 && now - seen.changedAt >= ${SETTLE_MS};
+        return count > 0 && now - seen.changedAt >= ${settleMs};
     })()`;
 
 /** Reads the rendered DOM with XPath; Lightpanda hands back markup, and jsdom gives it `document.evaluate` again. */
@@ -69,7 +72,7 @@ const extract = (window: JSDOM['window'], rules: Rules): Extracted[] => {
     return items;
 };
 
-const render = async (url: string, item: string): Promise<FetchResult> => {
+const render = async (url: string, item: string, settleMs: number): Promise<FetchResult> => {
     const args = [
         'fetch',
         url,
@@ -87,7 +90,7 @@ const render = async (url: string, item: string): Promise<FetchResult> => {
         '--block-cidrs',
         '198.18.0.0/15',
         '--wait-script',
-        settleScript(item),
+        settleScript(item, settleMs),
         '--wait-ms',
         String(RENDER_TIMEOUT),
         '--terminate-ms',
@@ -136,6 +139,11 @@ export const handler = async (ctx: Context): Promise<Data> => {
         itemDesc: params.get('itemDesc') || null,
         itemPubDate: params.get('itemPubDate') || null,
     };
+    const settleParam = params.get('settle');
+    const settleMs = settleParam ? Number(settleParam) : SETTLE_MS;
+    if (!Number.isInteger(settleMs) || settleMs < 0 || settleMs >= RENDER_TIMEOUT) {
+        throw new Error(`render: settle must be whole milliseconds from 0 to ${RENDER_TIMEOUT - 1}, got ${settleParam}`);
+    }
     // A bad XPath would otherwise only surface as a wait that never succeeds, 30 seconds later.
     const probe = new JSDOM('').window;
     try {
@@ -148,7 +156,7 @@ export const handler = async (ctx: Context): Promise<Data> => {
         probe.close();
     }
 
-    const result = await render(url, item);
+    const result = await render(url, item, settleMs);
     // Status 0 is a load that never got a response (refused, blocked as private, DNS), but also a wait script
     // that threw or returned true before the page loaded; `count > 0` in the settle script keeps the second
     // from happening. A wait that ran out keeps its status and its dump.
@@ -241,6 +249,7 @@ export const route: Route = {
 | \`itemDesc\` | XPath relative to the item; an element gives its inner HTML | none |
 | \`itemPubDate\` | XPath relative to the item; parsed as a date | none |
 | \`title\` | Feed title | the page's \`<title>\` |
+| \`settle\` | Milliseconds with no change in the number of \`item\` matches before the page is read as finished. Shorter is faster but can cut off a list that paints in steps | \`1500\` |
 
 Attributes are read by selecting them in XPath, so there are no \`*Attr\` keys. Relative links resolve as the page does (after redirects, honouring \`<base href>\`); links that are not http(s) are dropped, items with an empty title are dropped, and items sharing a link keep the first. A pubDate that does not parse is left off.`,
     categories: ['other'],
