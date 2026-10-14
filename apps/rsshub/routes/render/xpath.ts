@@ -14,11 +14,13 @@ const execFileAsync = promisify(execFile);
 
 /**
  * Lightpanda, not Chromium: it renders the same client-side pages (37 kaggle competition links against
- * Chromium's 36) in about 160MiB, where Chromium took 726MiB PSS (2026-10-14, vault PR #991).
+ * Chromium's 36) in about 160MiB RSS, where Chromium took 726MiB PSS (2026-10-14, vault PR #991).
  */
-const LIGHTPANDA = process.env.LIGHTPANDA_EXECUTABLE_PATH || 'lightpanda';
-/** Budget for the page load and the settle wait together; past it Lightpanda stops the page's scripts. */
+const LIGHTPANDA = 'lightpanda';
+/** Budget for the page load and the settle wait together. */
 const RENDER_TIMEOUT = 30000;
+/** The page's scripts are stopped this long after the wait gives up, so a run-out wait reports Timeout, not the ScriptError a shared deadline gives. */
+const TERMINATE_GRACE = 2000;
 /** A gap this long with no new `item` match is read as the list having finished painting, as in the kaggle route. */
 const SETTLE_MS = 1500;
 
@@ -79,25 +81,35 @@ const render = async (url: string, item: string): Promise<FetchResult> => {
         'js',
         // A URL from the subscription must not reach the coolify network, the host or the cloud metadata service; checked after DNS, so redirects are covered too.
         '--block-private-networks',
+        // Not private by its list, but internal in practice: carrier-grade NAT (tailnets) and the benchmarking range.
+        '--block-cidrs',
+        '100.64.0.0/10',
+        '--block-cidrs',
+        '198.18.0.0/15',
         '--wait-script',
         settleScript(item),
         '--wait-ms',
         String(RENDER_TIMEOUT),
         '--terminate-ms',
-        String(RENDER_TIMEOUT),
+        String(RENDER_TIMEOUT + TERMINATE_GRACE),
     ];
     let stdout: string;
     try {
         ({ stdout } = await execFileAsync(LIGHTPANDA, args, { timeout: RENDER_TIMEOUT + 10000, maxBuffer: 64 * 1024 * 1024 }));
     } catch (error) {
         // Exit 1 also means "the wait ran out", which still leaves a dump on stdout; anything without one is a real failure.
+        // The message is rebuilt, since execFile's own repeats the whole argument list, settle script included.
         const partial = (error as { stdout?: string }).stdout;
         if (!partial) {
-            throw error;
+            throw new Error(`render: lightpanda failed on ${url}: ${(error as { code?: unknown; signal?: unknown }).signal ?? (error as { code?: unknown }).code}`);
         }
         stdout = partial;
     }
-    return JSON.parse(stdout) as FetchResult;
+    try {
+        return JSON.parse(stdout) as FetchResult;
+    } catch {
+        throw new Error(`render: lightpanda gave no JSON for ${url} (${stdout.length} bytes, cut off or killed)`);
+    }
 };
 
 export const handler = async (ctx: Context): Promise<Data> => {
@@ -124,14 +136,20 @@ export const handler = async (ctx: Context): Promise<Data> => {
     };
     // A bad XPath would otherwise only surface as a wait that never succeeds, 30 seconds later.
     const probe = new JSDOM('').window;
-    for (const xpath of [rules.item, rules.itemTitle, rules.itemLink, rules.itemDesc, rules.itemPubDate]) {
-        if (xpath !== null) {
-            probe.document.createExpression(xpath);
+    try {
+        for (const xpath of [rules.item, rules.itemTitle, rules.itemLink, rules.itemDesc, rules.itemPubDate]) {
+            if (xpath !== null) {
+                probe.document.createExpression(xpath);
+            }
         }
+    } finally {
+        probe.close();
     }
 
     const result = await render(url, item);
-    // Status 0 is a load that never got a response (refused, blocked as private, DNS); a wait that ran out keeps its status and its dump.
+    // Status 0 is a load that never got a response (refused, blocked as private, DNS), but also a wait script
+    // that threw or returned true before the page loaded; `count > 0` in the settle script keeps the second
+    // from happening. A wait that ran out keeps its status and its dump.
     if (result.http_status === 0 || !result.content) {
         throw new Error(`render: ${url} did not load (${result.error ?? 'no content'})`);
     }
@@ -143,9 +161,17 @@ export const handler = async (ctx: Context): Promise<Data> => {
     }
 
     const { window } = new JSDOM(result.content, { url: result.url || url });
+    try {
+        return toFeed(window, rules, url, params.get('title'));
+    } finally {
+        window.close();
+    }
+};
+
+const toFeed = (window: JSDOM['window'], rules: Rules, url: string, title: string | null): Data => {
     const extracted = extract(window, rules);
     if (extracted.length === 0) {
-        throw new Error(`render: ${url} rendered no node for item=${item}`);
+        throw new Error(`render: ${url} rendered no node for item=${rules.item}`);
     }
     // Relative links resolve as the page does: after redirects, and against any <base href>.
     const base = window.document.baseURI;
@@ -186,7 +212,7 @@ export const handler = async (ctx: Context): Promise<Data> => {
         throw new Error(`render: itemTitle=${rules.itemTitle} gave no text on any of the ${extracted.length} items`);
     }
     return {
-        title: params.get('title') || window.document.title,
+        title: title || window.document.title,
         link: url,
         description: `Rendered ${url}`,
         item: items,

@@ -1,6 +1,6 @@
 # rsshub
 
-RSSHub built from upstream master with this directory's own routes, plus two headless browsers for pages rendered client-side: Chromium for the kaggle route, and Lightpanda (about 160MiB per render against Chromium's 726MiB) for `/render/xpath`.
+RSSHub built from upstream master with this directory's own routes, plus two headless browsers for pages rendered client-side: Chromium for the kaggle route, and Lightpanda (about 160MiB RSS per render, where Chromium took 726MiB PSS) for `/render/xpath`.
 
 ## URLs
 
