@@ -39,3 +39,11 @@ The path is `/render/xpath/<encodeURIComponent(url)>/<encodeURIComponent(routePa
 |---|---|---|
 | DIME 最新記事 | `https://dime.jp/` | `item=//section[contains(@class,'listBlock-latest')]//a[contains(@class,'summary_link')]&itemTitle=.//h3&itemDesc=.//div[contains(@class,'summary_cat')]&itemPubDate=.//div[contains(@class,'summary_date')]&title=DIME 最新記事` |
 | NVIDIA build models (newest first, 24 cards; no dates, the page keeps them only in its script payload) | `https://build.nvidia.com/models` | `item=//li[.//a[@data-nvtrack-nav-object='artifact-card']]&itemTitle=.//h3&itemLink=.//h3/a/@href&itemDesc=.//span[contains(@class,'line-clamp-2')]&title=NVIDIA build models` |
+
+## Feeds on other routes
+
+| Feed | Route |
+|---|---|
+| OpenRouter models (newest first, from `https://openrouter.ai/api/v1/models`) | `/rsshub/transform/json/<enc(url)>/<enc(title=OpenRouter models&item=data&itemTitle=name&itemLink=id&itemLinkPrefix=https://openrouter.ai/&itemDesc=description)>?limit=50&format=json` — `format=json` because FreshRSS reads any URL containing `json` as a JSON Feed and fails on RSS. No dates: `created` is Unix seconds, which the route reads as milliseconds |
+| Ollama library (newest) | `/ollama/library?limit=50` |
+| Ollama blog | `/ollama/blog` |
