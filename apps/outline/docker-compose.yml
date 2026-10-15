@@ -60,6 +60,10 @@ services:
       SMTP_FROM_EMAIL: outline@takashiaihara.site
     volumes:
       - outline-data:/var/lib/outline/data
+    networks:
+      - default
+      # coolify network に入らない apps/hermes-oauth から API を叩かせるため (http://outline:3000)
+      - hermes-outline
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/_health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -71,3 +75,7 @@ volumes:
   outline-pg:
   outline-redis:
   outline-data:
+
+networks:
+  hermes-outline:
+    external: true
