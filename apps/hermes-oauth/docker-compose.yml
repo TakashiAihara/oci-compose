@@ -27,6 +27,7 @@ services:
       - default
       - hermes-matrix
       - hermes-alerts
+      - hermes-outline
     deploy:
       resources:
         limits:
@@ -40,4 +41,8 @@ networks:
     external: true
   # healthcheck の通知先 ntfy にだけ届く network。作成は oi1 で 1 回: sudo docker network create hermes-alerts
   hermes-alerts:
+    external: true
+  # Outline (apps/outline) の API にだけ届く network。cron の要約を自宅 Outline に書くため。
+  # 作成は oi1 で 1 回: sudo docker network create hermes-outline
+  hermes-outline:
     external: true
