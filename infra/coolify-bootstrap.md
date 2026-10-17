@@ -40,7 +40,7 @@ ssh -L 8000:localhost:8000 si1
 2. **homepage** — 静的、 すぐ動く動作確認用
 3. **changedetection / n8n / rsshub** — stateless 系
 4. **ntfy** — state 復元あり
-5. **teleport** — state 復元 + TLS 設定が必要、 一番面倒
+5. **teleport** — state 復元 + TLS 設定が必要、 一番面倒 (2026-10-17 に撤去済み)
 6. **tinyproxy** — Coolify 配下に置くなら最後 (host network mode の都合)
 
 ## Secrets 注入 (resend pw 等)
