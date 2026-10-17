@@ -18,7 +18,6 @@ apps/
 │   └── config/             # server.yml
 ├── rsshub/docker-compose.yml
 ├── smtp/docker-compose.yml
-├── teleport/docker-compose.yml
 └── tinyproxy/docker-compose.yml
 infra/
 └── coolify-bootstrap.md     # Coolify install / git 連携手順
@@ -28,7 +27,7 @@ infra/
 
 - 各 `apps/<name>/` を Coolify の 1 resource に対応
 - Coolify UI から git URL `https://github.com/TakashiAihara/oci-compose.git` を登録、 base directory に `apps/<name>` を指定
-- Secrets (resend pw, teleport JWT 等) は git に入れない。 Coolify UI の Environment Variables 機能で注入
+- Secrets (resend pw 等) は git に入れない。 Coolify UI の Environment Variables 機能で注入
 - branch は基本 `main`、 重大な変更時のみ feature branch + PR
 
 ## ホスト
