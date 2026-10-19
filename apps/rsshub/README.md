@@ -48,3 +48,4 @@ The path is `/render/xpath/<encodeURIComponent(url)>/<encodeURIComponent(routePa
 | OpenRouter models (newest first, from `https://openrouter.ai/api/v1/models`) | `/rsshub/transform/json/<enc(url)>/<enc(title=OpenRouter models&item=data&itemTitle=name&itemLink=id&itemLinkPrefix=https://openrouter.ai/&itemDesc=description)>?limit=50&format=json` — `format=json` because FreshRSS reads any URL containing `json` as a JSON Feed and fails on RSS. No dates: `created` is Unix seconds, which the route reads as milliseconds |
 | Ollama library (newest) | `/ollama/library?limit=50` |
 | Ollama blog | `/ollama/blog` |
+| X おすすめ (For you) of the sub account | `/twitter/home` — needs `TWITTER_AUTH_TOKEN` (Coolify env, from Infisical home/prod). `/twitter/home_latest` is the Following tab |
