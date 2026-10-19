@@ -14,6 +14,10 @@ services:
       - --cookie-secure=true
       - --reverse-proxy=true
       - --skip-provider-button=true
+      # X-Forwarded-Host から callback を組み立てさせない
+      - --redirect-url=https://taba.takashiaihara.site/oauth2/callback
+      # groups はログイン時の値が cookie に残るので、グループから外した効きを 1 日で切る
+      - --cookie-expire=24h
     environment:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set via Coolify env}
       # alpha.yaml が ${...} で読む

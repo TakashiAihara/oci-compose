@@ -3,13 +3,15 @@
 # STATIC_API_KEY で API から作る (UI の初回 setup は使わない)。
 services:
   pocket-id:
-    image: ghcr.io/pocket-id/pocket-id:v2
+    # v2 の動くタグだと再 deploy で DB migration を含む版へ黙って上がる (migration は戻せない)
+    image: ghcr.io/pocket-id/pocket-id:v2.18.0
     restart: unless-stopped
     expose:
       - "1411"
     environment:
       APP_URL: https://id.takashiaihara.site
-      # Traefik の後ろなので X-Forwarded-* を信じる
+      # 全送信元の X-Forwarded-* を信じる。Traefik の IP はアプリのネットワークごとに違い固定できないため。
+      # 外からは Traefik 経由でしか届かず (expose のみ)、偽れるのは同じ docker ネットワークのコンテナが出す監査ログの IP まで
       TRUST_PROXY: "true"
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set via Coolify env}
       STATIC_API_KEY: ${STATIC_API_KEY:?set via Coolify env}
