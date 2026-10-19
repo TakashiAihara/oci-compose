@@ -23,5 +23,8 @@ services:
       # alpha.yaml が ${...} で読む
       TABA_WEB_OIDC_SECRET: ${TABA_WEB_OIDC_SECRET:?set via Coolify env}
       TABA_WEB_KEY: ${TABA_WEB_KEY:?set via Coolify env}
+    # oi1 のコンテナから oi1 自身の公開 IP へは届かない (hairpin)。OIDC discovery を oi1 の Traefik へ直に向ける
+    extra_hosts:
+      - id.takashiaihara.site:host-gateway
     volumes:
       - ./alpha.yaml:/etc/oauth2-proxy/alpha.yaml:ro
