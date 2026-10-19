@@ -18,6 +18,8 @@ services:
       - --redirect-url=https://taba.takashiaihara.site/oauth2/callback
       # groups はログイン時の値が cookie に残るので、グループから外した効きを 1 日で切る
       - --cookie-expire=24h
+      # Uptime Kuma が oi1 → taba1 の経路を外から見る口。taba web はこのパスを持たず 404 の JSON を返すので、中身は何も出ない
+      - --skip-auth-route=GET=^/healthz$
     environment:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set via Coolify env}
       # alpha.yaml が ${...} で読む
