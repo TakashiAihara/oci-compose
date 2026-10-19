@@ -1,0 +1,27 @@
+# SSO の発行元 (OIDC)。passkey だけでログインする。oi1 のアプリはここを OIDC の issuer にするか、
+# oauth2-proxy を前に置いてここへ飛ばす (apps/taba-web)。利用者・グループ・クライアントは
+# STATIC_API_KEY で API から作る (UI の初回 setup は使わない)。
+services:
+  pocket-id:
+    image: ghcr.io/pocket-id/pocket-id:v2
+    restart: unless-stopped
+    expose:
+      - "1411"
+    environment:
+      APP_URL: https://id.takashiaihara.site
+      # Traefik の後ろなので X-Forwarded-* を信じる
+      TRUST_PROXY: "true"
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set via Coolify env}
+      STATIC_API_KEY: ${STATIC_API_KEY:?set via Coolify env}
+      ANALYTICS_DISABLED: "true"
+    volumes:
+      - pocket-id-data:/app/data
+    healthcheck:
+      test: ["CMD", "/app/pocket-id", "healthcheck"]
+      interval: 90s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+
+volumes:
+  pocket-id-data:
