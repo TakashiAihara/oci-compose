@@ -1,0 +1,29 @@
+# oauth2-proxy の alpha config。秘密は環境変数から読み、ここには書かない。
+server:
+  BindAddress: 0.0.0.0:4180
+upstreamConfig:
+  upstreams:
+    - id: taba1
+      path: /
+      uri: http://192.168.0.182:8790
+providers:
+  - id: pocket-id
+    provider: oidc
+    clientID: taba-web
+    clientSecret: ${TABA_WEB_OIDC_SECRET}
+    scope: openid email profile groups
+    # Pocket ID 側でもクライアントを taba グループに絞っている。ここでも絞る
+    allowedGroups:
+      - taba
+    oidcConfig:
+      issuerURL: https://id.takashiaihara.site
+      emailClaim: email
+      groupsClaim: groups
+      audienceClaims:
+        - aud
+injectRequestHeaders:
+  # taba web は oi1 の送信元だけでは通さない (oi1 の全コンテナが同じ送信元になるため)
+  - name: x-taba-web-key
+    values:
+      - secretSource:
+          fromEnv: TABA_WEB_KEY

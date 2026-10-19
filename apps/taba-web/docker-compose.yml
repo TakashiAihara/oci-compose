@@ -1,0 +1,27 @@
+# taba の閲覧ページ (taba.takashiaihara.site)。本体は家の taba1 で動く `taba web` で、
+# ここは Pocket ID (apps/pocket-id) のログインを前に置く oauth2-proxy だけ。
+# taba1 へは site-to-site で届き、taba web は oi1 の送信元と x-taba-web-key の鍵が揃った要求だけを通す。
+services:
+  taba-web:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+    restart: unless-stopped
+    expose:
+      - "4180"
+    command:
+      - --alpha-config=/etc/oauth2-proxy/alpha.yaml
+      - --email-domain=*
+      - --cookie-name=_taba_web
+      - --cookie-secure=true
+      - --reverse-proxy=true
+      - --skip-provider-button=true
+      # X-Forwarded-Host から callback を組み立てさせない
+      - --redirect-url=https://taba.takashiaihara.site/oauth2/callback
+      # groups はログイン時の値が cookie に残るので、グループから外した効きを 1 日で切る
+      - --cookie-expire=24h
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set via Coolify env}
+      # alpha.yaml が ${...} で読む
+      TABA_WEB_OIDC_SECRET: ${TABA_WEB_OIDC_SECRET:?set via Coolify env}
+      TABA_WEB_KEY: ${TABA_WEB_KEY:?set via Coolify env}
+    volumes:
+      - ./alpha.yaml:/etc/oauth2-proxy/alpha.yaml:ro
