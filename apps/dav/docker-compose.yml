@@ -18,7 +18,8 @@ services:
         target: /config.yml
 
 # bind の content: (Coolify の拡張) は初回だけ読まれ、以後は Coolify の DB の中身が使われて repo と食い違う。
-# compose 標準の configs なら deploy ごとにこの中身で書き直される
+# compose 標準の configs はコンテナを作るときに書かれ、Coolify は deploy ごとにコンテナを作り直すので毎回この中身になる。
+# compose が中の $ を展開するので、$ を書くなら $$ にする
 configs:
   dav-config:
     content: |
