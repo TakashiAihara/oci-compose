@@ -29,7 +29,6 @@ services:
             colors: false
           cors:
             enabled: true
-            credentials: true
             # Chrome ウェブストア版 NiceTab の拡張 ID (README のストア URL から)
             allowed_hosts:
               - chrome-extension://fonflmjnjbkigocpoommgmhljdpljain
