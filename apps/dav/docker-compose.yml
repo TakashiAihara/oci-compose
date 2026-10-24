@@ -13,12 +13,15 @@ services:
       DAV_PASSWORD: ${DAV_PASSWORD:?set via Coolify env}
     volumes:
       - dav-data:/data
-      # Coolify は repo の ./file を bind せず初回にディレクトリを作るので、中身を content で渡す
-      - type: bind
-        source: ./config.yml
+    configs:
+      - source: dav-config
         target: /config.yml
-        read_only: true
-        content: |
+
+# bind の content: (Coolify の拡張) は初回だけ読まれ、以後は Coolify の DB の中身が使われて repo と食い違う。
+# compose 標準の configs なら deploy ごとにこの中身で書き直される
+configs:
+  dav-config:
+    content: |
           address: 0.0.0.0
           port: 6065
           directory: /data
