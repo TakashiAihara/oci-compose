@@ -1,0 +1,41 @@
+# NiceTab (タブ管理の Chrome 拡張) の同期先の WebDAV (dav.takashiaihara.site)。
+# 拡張の「サイトへのアクセス」を「クリック時」のまま使うため、拡張の origin からの CORS だけを許可する。
+# 資格情報は Infisical home/prod の NICETAB_WEBDAV_USERNAME / NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
+services:
+  dav:
+    image: ghcr.io/hacdias/webdav:v5.17.1
+    restart: unless-stopped
+    expose:
+      - "6065"
+    command: ["--config", "/config.yml"]
+    environment:
+      DAV_USERNAME: ${DAV_USERNAME:?set via Coolify env}
+      DAV_PASSWORD: ${DAV_PASSWORD:?set via Coolify env}
+    volumes:
+      - dav-data:/data
+      # Coolify は repo の ./file を bind せず初回にディレクトリを作るので、中身を content で渡す
+      - type: bind
+        source: ./config.yml
+        target: /config.yml
+        read_only: true
+        content: |
+          address: 0.0.0.0
+          port: 6065
+          directory: /data
+          behindProxy: true
+          permissions: CRUD
+          log:
+            format: console
+            colors: false
+          cors:
+            enabled: true
+            credentials: true
+            # Chrome ウェブストア版 NiceTab の拡張 ID (README のストア URL から)
+            allowed_hosts:
+              - chrome-extension://fonflmjnjbkigocpoommgmhljdpljain
+          users:
+            - username: "{env}DAV_USERNAME"
+              password: "{env}DAV_PASSWORD"
+
+volumes:
+  dav-data:
