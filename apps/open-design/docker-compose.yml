@@ -1,7 +1,10 @@
 # OpenDesign (opendesign.takashiaihara.site)。daemon は Pocket ID (apps/pocket-id) のログインを
 # 前に置く oauth2-proxy の後ろにだけ置き、Traefik の domain は open-design-auth にだけ付ける。
-# 作業機の Claude Code から MCP で使うときは、oi1 に ssh してコンテナの中で `od mcp` を動かす
-# (daemon は loopback からの要求に token を求めないので、oauth2-proxy を通さずに済む)。
+# daemon は claude を --permission-mode bypassPermissions で起動するので、Coolify の
+# connect_to_docker_network は false にして、共有の coolify network の他のアプリから切り離す。
+# 作業機の Claude Code から MCP で使うときは、oi1 に ssh して
+# `docker exec -i <container> node /app/apps/daemon/bin/od.mjs mcp` を動かす。PATH の `od` は busybox の
+# octal dump で別物。daemon は loopback からの要求に token を求めないので、oauth2-proxy を通さずに済む。
 services:
   open-design:
     build: .
@@ -11,12 +14,23 @@ services:
       # OpenDesign が起動する claude を Max のサブスクの枠で動かす。ANTHROPIC_API_KEY は置かない (置くと従量課金に切り替わる)
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set via Coolify env}
       OD_ALLOWED_ORIGINS: https://opendesign.takashiaihara.site
+      # 会話の続き (--resume) を redeploy で失わないよう、claude の状態も volume に置く
+      CLAUDE_CONFIG_DIR: /app/.od/claude
+      # NOTE: 画面の設定から claude の ANTHROPIC_API_KEY を保存できる (/app/.od に残る)。入れると従量課金に切り替わる
     volumes:
       - open-design-data:/app/.od
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7456/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
-          # daemon の heap は 192 MiB 上限で、起動する claude が 1 本 0.65〜1.0 GB。同時 2 本までを見込む
+          # daemon の heap は 192 MiB 上限で、起動する claude が 1 本 0.65〜1.0 GB。同時に動く本数は制限していないので、3 本目で OOM kill になりうる
           memory: 3g
 
   open-design-auth:
