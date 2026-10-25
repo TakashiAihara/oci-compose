@@ -29,8 +29,9 @@ configs:
     content: |
           address: 0.0.0.0
           port: 6065
-          # ユーザーの directory を書き忘れたときに全員のフォルダが見えないよう、既定は存在しないパスにする
-          directory: /data/.no-user-directory
+          # ユーザーの directory を書き忘れたときに全員のフォルダが見えないよう、既定は存在しないパスにする。
+          # 親も無いので MKCOL / PUT は 409 で、クライアントからも作れない
+          directory: /nonexistent/no-user-directory
           behindProxy: true
           permissions: CRUD
           log:
