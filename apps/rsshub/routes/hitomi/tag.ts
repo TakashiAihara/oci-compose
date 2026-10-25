@@ -4,8 +4,12 @@ import type { Data, DataItem, Route } from '@/types';
 import cache from '@/utils/cache';
 import logger from '@/utils/logger';
 
+import { HASH } from './thumb';
+
 const LTN = 'https://ltn.gold-usergeneratedcontent.net';
 const SITE = 'https://hitomi.la';
+/** The browser opening FreshRSS loads thumbnails from here; FreshRSS itself reads the feed at http://rsshub:1200, which the browser cannot reach. */
+const THUMB = 'https://rsshub.takashiaihara.site/hitomi/thumb';
 /** Newest first; each id is 4 bytes, so this many ids is one small Range request. */
 const LIMIT = 25;
 const TIMEOUT_MS = 20000;
@@ -19,7 +23,7 @@ type Gallery = {
     language: string | null;
     date: string;
     galleryurl: string;
-    files: unknown[];
+    files: { hash?: string }[];
     artists: { artist: string }[] | null;
     tags: { tag: string; female?: string | number; male?: string | number }[] | null;
 };
@@ -45,6 +49,9 @@ const tagName = (t: NonNullable<Gallery['tags']>[number]): string => (Number(t.f
 export const toItem = (g: Gallery): DataItem => {
     const tags = (g.tags ?? []).map(tagName);
     const artists = (g.artists ?? []).map((a) => a.artist);
+    // Through thumb.ts, which adds the Referer the thumbnail host demands. The hash goes into an attribute, so only a hex hash is let through.
+    const hash = g.files[0]?.hash;
+    const image = hash && HASH.test(hash) ? `${THUMB}/${hash}` : undefined;
     const esc = (s: string) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;');
     // A value not starting with / would turn SITE into userinfo and point the link at another host.
     if (!g.galleryurl.startsWith('/')) {
@@ -57,8 +64,8 @@ export const toItem = (g: Gallery): DataItem => {
         pubDate: parseDate(g.date),
         author: artists.join(', ') || undefined,
         category: tags,
-        // No thumbnail: tn.gold-usergeneratedcontent.net answers 404 unless the Referer is hitomi.la, which a reader does not send.
-        description: `<p>${esc(g.type)} / ${esc(g.language ?? '-')} / ${g.files.length}p</p><p>${tags.map(esc).join(', ')}</p>`,
+        image,
+        description: `${image ? `<p><img src="${image}"></p>` : ''}<p>${esc(g.type)} / ${esc(g.language ?? '-')} / ${g.files.length}p</p><p>${tags.map(esc).join(', ')}</p>`,
     };
 };
 
