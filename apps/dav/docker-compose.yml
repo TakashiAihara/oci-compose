@@ -1,7 +1,7 @@
 # NiceTab (タブ管理の Chrome 拡張) の同期先の WebDAV (dav.takashiaihara.site)。
 # 拡張の「サイトへのアクセス」を「クリック時」のまま使うため、拡張の origin からの CORS だけを許可する。
 # Google アカウント (Chrome のプロファイル) ごとにユーザーとフォルダを分け、他のアカウントのタブを読めないようにする。
-# パスワードは Infisical の NICETAB_WEBDAV_PASSWORD_<名前> (home/prod)、mameta だけ mameta/prod の NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
+# パスワードは Infisical の NICETAB_WEBDAV_PASSWORD_<名前> (home/prod)、mameta と john は自分の project (mameta/prod・john/prod) の NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
 # 上流はユーザーのフォルダを作らない (無いと PROPFIND 404 / PUT 409 で NiceTab の同期が失敗する) ので、ユーザーを足すときは volume に先に mkdir する。
 services:
   dav:
