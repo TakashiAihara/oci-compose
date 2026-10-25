@@ -41,8 +41,9 @@ export const collect = (x: unknown, out: Map<string, Article>): void => {
 export const toItem = (a: Article): DataItem => {
     const ts = Array.isArray(a[4]) && typeof a[4][0] === 'number' ? new Date(a[4][0] * 1000) : undefined;
     const publisher = Array.isArray(a[10]) && typeof a[10][2] === 'string' ? a[10][2] : undefined;
-    // Google's resized copy, not the publisher's original: every image has one (45 of 50, against 39 originals) and it opens without the cookie.
-    const path = Array.isArray(a[8]) && Array.isArray(a[8][0]) && typeof a[8][0][0] === 'string' && a[8][0][0].startsWith('/attachments/') ? a[8][0][0] : undefined;
+    // Google's resized copy, not the publisher's original: more articles have it (45 of 50, against 39 originals) and it opens without the cookie.
+    // The id goes into an HTML attribute, so only its base64url alphabet is let through.
+    const path = Array.isArray(a[8]) && Array.isArray(a[8][0]) && typeof a[8][0][0] === 'string' && /^\/attachments\/[\w-]+$/.test(a[8][0][0]) ? a[8][0][0] : undefined;
     const image = path ? `${ORIGIN}/api${path}=-w640-h360-p-df` : undefined;
     return {
         title: a[2] as string,
