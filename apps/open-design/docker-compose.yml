@@ -22,7 +22,7 @@ services:
       - open-design-data:/app/.od
     security_opt:
       - no-new-privileges:true
-    pids_limit: 256
+
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7456/api/health"]
       interval: 30s
@@ -33,6 +33,8 @@ services:
         limits:
           # daemon の heap は 192 MiB 上限で、起動する claude が 1 本 0.65〜1.0 GB。同時に動く本数は制限していないので、3 本目で OOM kill になりうる
           memory: 3g
+          # Coolify が deploy.resources.limits.pids を足すので、top-level の pids_limit では書かない (食い違うと compose が拒否する)
+          pids: 256
 
   open-design-auth:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
