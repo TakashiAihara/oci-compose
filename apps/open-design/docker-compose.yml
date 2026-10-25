@@ -4,7 +4,8 @@
 # connect_to_docker_network は false にして、他のアプリのコンテナへの直接の到達を切る
 # (coolify-proxy はこの app の network にも入るので、Traefik 経由の公開ルートには届く)。
 # 作業機の Claude Code から MCP で使うときは、oi1 に ssh して
-# `docker exec -i <container> node /app/apps/daemon/bin/od.mjs mcp` を動かす。PATH の `od` は busybox の
+# `docker exec -i <container> node /app/apps/daemon/bin/od.mjs mcp --daemon-url http://127.0.0.1:7456` を動かす
+# (--daemon-url が無いと daemon を見つけられずに落ちる)。PATH の `od` は busybox の
 # octal dump で別物。daemon は loopback からの要求に token を求めないので、oauth2-proxy を通さずに済む。
 services:
   open-design:
