@@ -1,0 +1,50 @@
+# OpenDesign (opendesign.takashiaihara.site)。daemon は Pocket ID (apps/pocket-id) のログインを
+# 前に置く oauth2-proxy の後ろにだけ置き、Traefik の domain は open-design-auth にだけ付ける。
+# 作業機の Claude Code から MCP で使うときは、oi1 に ssh してコンテナの中で `od mcp` を動かす
+# (daemon は loopback からの要求に token を求めないので、oauth2-proxy を通さずに済む)。
+services:
+  open-design:
+    build: .
+    restart: unless-stopped
+    environment:
+      OD_API_TOKEN: ${OD_API_TOKEN:?set via Coolify env}
+      # OpenDesign が起動する claude を Max のサブスクの枠で動かす。ANTHROPIC_API_KEY は置かない (置くと従量課金に切り替わる)
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:?set via Coolify env}
+      OD_ALLOWED_ORIGINS: https://opendesign.takashiaihara.site
+    volumes:
+      - open-design-data:/app/.od
+    deploy:
+      resources:
+        limits:
+          # daemon の heap は 192 MiB 上限で、起動する claude が 1 本 0.65〜1.0 GB。同時 2 本までを見込む
+          memory: 3g
+
+  open-design-auth:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+    restart: unless-stopped
+    expose:
+      - "4180"
+    command:
+      - --alpha-config=/etc/oauth2-proxy/alpha.yaml
+      - --email-domain=*
+      - --cookie-name=_open_design
+      - --cookie-secure=true
+      - --reverse-proxy=true
+      - --skip-provider-button=true
+      # X-Forwarded-Host から callback を組み立てさせない
+      - --redirect-url=https://opendesign.takashiaihara.site/oauth2/callback
+      # groups はログイン時の値が cookie に残るので、グループから外した効きを 1 日で切る
+      - --cookie-expire=24h
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set via Coolify env}
+      # alpha.yaml が ${...} で読む
+      OPEN_DESIGN_OIDC_SECRET: ${OPEN_DESIGN_OIDC_SECRET:?set via Coolify env}
+      OD_API_BEARER: Bearer ${OD_API_TOKEN}
+    # oi1 のコンテナから oi1 自身の公開 IP へは届かない (hairpin)。OIDC discovery を oi1 の Traefik へ直に向ける
+    extra_hosts:
+      - id.takashiaihara.site:host-gateway
+    volumes:
+      - ./alpha.yaml:/etc/oauth2-proxy/alpha.yaml:ro
+
+volumes:
+  open-design-data:
