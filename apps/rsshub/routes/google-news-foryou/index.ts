@@ -8,6 +8,8 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const MAX_PAGES = 12;
 /** Per request; upstream's global fetch has no timeout, and a stalled Google answer would hold the route forever. */
 const TIMEOUT_MS = 20000;
+/** For the whole read, under the 60s cache claim, so a slow Google does not start a second read on top of this one. */
+const DEADLINE_MS = 50000;
 
 type Article = unknown[];
 
@@ -65,11 +67,13 @@ const parse = <T>(text: string, what: string): T => {
 };
 
 /** fetch errors quote an invalid header value whole, which would put the cookie in the log and the error page; this keeps only the kind. */
-const get = async (url: string, init: RequestInit, what: string): Promise<Response> => {
+const get = async (url: string, init: RequestInit, what: string, deadline: AbortSignal): Promise<Response> => {
     try {
-        return await fetch(url, { ...init, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) });
+        return await fetch(url, { ...init, redirect: 'manual', signal: AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), deadline]) });
     } catch (error) {
-        throw new Error(`google-news-foryou: ${what} failed (${error instanceof Error ? error.name : 'error'})`);
+        // The cause's code (ECONNRESET, ENOTFOUND) carries no header value, so it is kept to tell network failures apart.
+        const code = error instanceof Error && error.cause && typeof (error.cause as { code?: unknown }).code === 'string' ? ` ${(error.cause as { code: string }).code}` : '';
+        throw new Error(`google-news-foryou: ${what} failed (${error instanceof Error ? error.name : 'error'}${code})`);
     }
 };
 
@@ -86,7 +90,8 @@ export const handler = async (): Promise<Data> => {
     const headers = { cookie, 'user-agent': UA, 'accept-language': 'ja' };
 
     // manual: a dead cookie answers with a redirect to the sign-in page, which must fail the feed rather than read as an empty tab.
-    const res = await get(PAGE, { headers }, 'the For you page');
+    const deadline = AbortSignal.timeout(DEADLINE_MS);
+    const res = await get(PAGE, { headers }, 'the For you page', deadline);
     if (res.status !== 200) {
         throw new Error(`google-news-foryou: ${PAGE} answered ${res.status} ${res.headers.get('location')?.startsWith('https://accounts.google.com') ? '(signed out: refresh GOOGLE_COOKIE)' : ''}`);
     }
@@ -110,10 +115,11 @@ export const handler = async (): Promise<Data> => {
     let page = 0;
     for (let offset = 11; page < MAX_PAGES && typeof token === 'string'; page++, offset += 10) {
         // A later page failing keeps what was read: only that page is lost, and the log says so.
+        // The first one failing is not a short tab but a broken request (tokens, template, endpoint), so it fails the feed.
         try {
             const qs = new URLSearchParams({ rpcids: 'JqDnie', 'source-path': '/foryou', 'f.sid': fsid, bl, hl: 'ja', gl: 'JP', rt: 'c' });
             const body = new URLSearchParams({ 'f.req': JSON.stringify([[['JqDnie', JSON.stringify([...template.slice(0, 2), token, offset]), null, 'generic']]]), at });
-            const more = await get(`${ORIGIN}/_/DotsSplashUi/data/batchexecute?${qs}`, { method: 'POST', headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body }, `page ${page + 1}`);
+            const more = await get(`${ORIGIN}/_/DotsSplashUi/data/batchexecute?${qs}`, { method: 'POST', headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body }, `page ${page + 1}`, deadline);
             if (more.status !== 200) {
                 throw new Error(`google-news-foryou: page ${page + 1} answered ${more.status}`);
             }
@@ -126,11 +132,14 @@ export const handler = async (): Promise<Data> => {
             collect(answer, articles);
             token = answer[1]?.[1];
         } catch (error) {
+            if (page === 0) {
+                throw error;
+            }
             logger.warn(`${error instanceof Error ? error.message : error}; serving the ${articles.size} articles read so far`);
             break;
         }
     }
-    if (page === MAX_PAGES) {
+    if (page === MAX_PAGES && typeof token === 'string') {
         logger.warn(`google-news-foryou: stopped at MAX_PAGES (${MAX_PAGES}) with a token left`);
     }
 
@@ -141,8 +150,8 @@ export const handler = async (): Promise<Data> => {
     return {
         title: 'Google ニュース おすすめ',
         link: PAGE,
-        // Readers key items on the link; one story under two ids would show twice.
-        item: [...new Map([...articles.values()].map((a) => [a[6] as string, toItem(a)])).values()],
+        // Readers key items on the link; one story under two ids would show twice. The first keeps its place and its own title.
+        item: [...articles.values()].filter((a, i, all) => all.findIndex((b) => b[6] === a[6]) === i).map(toItem),
     };
 };
 
