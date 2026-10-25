@@ -30,6 +30,7 @@ Deploy is needed only when routes, the Dockerfile or the compose file change, no
 | Route | Source | Notes |
 |---|---|---|
 | `/render/xpath/:url/:routeParams` | Any page, rendered in Lightpanda | Rules are XPath; keys and defaults are in the route's description. Needs `ALLOW_USER_SUPPLY_UNSAFE_DOMAIN` (set in the compose file). Requests to private and internal addresses are blocked |
+| `/google-news-foryou` | The For you tab of `news.google.com`, signed in with `GOOGLE_COOKIE` | No browser: reads the page's own data and asks for more pages the way its scrolling does, up to the tab's end (about 200 articles). A signed-out cookie fails the feed with `signed out: refresh GOOGLE_COOKIE`; copy the `cookie:` request header of a signed-in `news.google.com/foryou` into Infisical home/prod `GOOGLE_COOKIE` and the Coolify env, then restart |
 
 ## Feeds built on `/render/xpath`
 
