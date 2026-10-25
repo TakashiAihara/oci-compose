@@ -79,7 +79,11 @@ export const handler = async (ctx: Context): Promise<Data> => {
 
     // identity: a Range of a gzip response comes back as a fragment that does not inflate. A missing tag answers 404 and fails the feed.
     const list = await get(`${LTN}/tag/${encodeURIComponent(tag)}-${language}.nozomi`, { headers: { range: `bytes=0-${LIMIT * 4 - 1}`, 'accept-encoding': 'identity' } });
-    // A 200 means the Range was ignored and the body is the whole list; slicing keeps the feed to LIMIT galleries either way.
+    // A 200 means the Range was ignored and the body is the whole list, megabytes for a popular tag; stop before reading it.
+    if (list.status !== 206) {
+        await list.body?.cancel();
+        throw new Error(`hitomi: the list of ${tag} answered ${list.status} instead of 206; the site no longer honours Range`);
+    }
     const ids = parseIds(await list.arrayBuffer()).slice(0, LIMIT);
     if (ids.length === 0) {
         throw new Error(`hitomi: the list of ${tag} is empty`);
