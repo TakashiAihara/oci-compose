@@ -61,8 +61,46 @@ services:
     # oi1 のコンテナから oi1 自身の公開 IP へは届かない (hairpin)。OIDC discovery を oi1 の Traefik へ直に向ける
     extra_hosts:
       - id.takashiaihara.site:host-gateway
-    volumes:
-      - ./alpha.yaml:/etc/oauth2-proxy/alpha.yaml:ro
+    configs:
+      - source: open-design-auth-config
+        target: /etc/oauth2-proxy/alpha.yaml
 
 volumes:
   open-design-data:
+
+# 設定ファイルは bind にせず configs で渡す (Coolify は ./file の bind をディレクトリとして作り、tinker で入れた中身は
+# DB に残って repo の変更が届かない)。中の $${...} は compose に展開させず、oauth2-proxy が環境変数から読む
+configs:
+  open-design-auth-config:
+    content: |
+      # oauth2-proxy の alpha config。秘密は環境変数から読み、ここには書かない。
+      server:
+        BindAddress: 0.0.0.0:4180
+      upstreamConfig:
+        upstreams:
+          - id: open-design
+            path: /
+            uri: http://open-design:7456
+            # 既定の 30 秒では、応答ヘッダを返すまでが長い同期の処理 (export 等) が 502 になる
+            timeout: 10m
+      providers:
+        - id: pocket-id
+          provider: oidc
+          clientID: open-design
+          clientSecret: $${OPEN_DESIGN_OIDC_SECRET}
+          scope: openid email profile groups
+          # Pocket ID 側でもクライアントを open-design グループに絞っている。ここでも絞る
+          allowedGroups:
+            - open-design
+          oidcConfig:
+            issuerURL: https://id.takashiaihara.site
+            emailClaim: email
+            groupsClaim: groups
+            audienceClaims:
+              - aud
+      injectRequestHeaders:
+        # daemon は OD_API_TOKEN を持たない要求を 401 にする。ブラウザに token を渡さず、ここで付ける
+        - name: Authorization
+          values:
+            - secretSource:
+                fromEnv: OD_API_BEARER
