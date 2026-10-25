@@ -41,7 +41,7 @@ export const collect = (x: unknown, out: Map<string, Article>): void => {
 export const toItem = (a: Article): DataItem => {
     const ts = Array.isArray(a[4]) && typeof a[4][0] === 'number' ? new Date(a[4][0] * 1000) : undefined;
     const publisher = Array.isArray(a[10]) && typeof a[10][2] === 'string' ? a[10][2] : undefined;
-    // Google's resized copy, not the publisher's original: more articles have it (45 of 50, against 39 originals) and it opens without the cookie.
+    // Google's resized copy, not the publisher's original: all 45 of 50 articles with an image have it (39 have the original) and it opens without the cookie.
     // The id goes into an HTML attribute, so only its base64url alphabet is let through.
     const path = Array.isArray(a[8]) && Array.isArray(a[8][0]) && typeof a[8][0][0] === 'string' && /^\/attachments\/[\w-]+$/.test(a[8][0][0]) ? a[8][0][0] : undefined;
     const image = path ? `${ORIGIN}/api${path}=-w640-h360-p-df` : undefined;
@@ -53,7 +53,9 @@ export const toItem = (a: Article): DataItem => {
         image,
         description: image ? `<img src="${image}" referrerpolicy="no-referrer">` : undefined,
         enclosure_url: image,
+        // -df answers JPEG even for a PNG original (2026-10-25); RSS 2.0 requires a length, and 0 is upstream's own fill.
         enclosure_type: image ? 'image/jpeg' : undefined,
+        enclosure_length: image ? 0 : undefined,
     };
 };
 
@@ -155,11 +157,16 @@ export const handler = async (): Promise<Data> => {
     if (articles.size === 0) {
         throw new Error('google-news-foryou: no article found; the data layout changed');
     }
+    // Readers key items on the link; one story under two ids would show twice. The first keeps its place and its own title.
+    const items = [...articles.values()].filter((a, i, all) => all.findIndex((b) => b[6] === a[6]) === i).map(toItem);
+    // Images vanishing all at once means [8][0][0] moved; the feed still reads, so only the log says so.
+    if (!items.some((i) => i.image)) {
+        logger.warn('google-news-foryou: no item has an image; the image path moved');
+    }
     return {
         title: 'Google ニュース おすすめ',
         link: PAGE,
-        // Readers key items on the link; one story under two ids would show twice. The first keeps its place and its own title.
-        item: [...articles.values()].filter((a, i, all) => all.findIndex((b) => b[6] === a[6]) === i).map(toItem),
+        item: items,
     };
 };
 
