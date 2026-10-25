@@ -1,6 +1,8 @@
 # NiceTab (タブ管理の Chrome 拡張) の同期先の WebDAV (dav.takashiaihara.site)。
 # 拡張の「サイトへのアクセス」を「クリック時」のまま使うため、拡張の origin からの CORS だけを許可する。
-# 資格情報は Infisical home/prod の NICETAB_WEBDAV_USERNAME / NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
+# Google アカウント (Chrome のプロファイル) ごとにユーザーとフォルダを分け、他のアカウントのタブを読めないようにする。
+# パスワードは Infisical の NICETAB_WEBDAV_PASSWORD_<名前> (home/prod)、mameta だけ mameta/prod の NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
+# 上流はユーザーのフォルダを作らない (無いと PROPFIND 404 / PUT 409 で NiceTab の同期が失敗する) ので、ユーザーを足すときは volume に先に mkdir する。
 services:
   dav:
     image: ghcr.io/hacdias/webdav:v5.17.1
@@ -9,8 +11,10 @@ services:
       - "6065"
     command: ["--config", "/config.yml"]
     environment:
-      DAV_USERNAME: ${DAV_USERNAME:?set via Coolify env}
-      DAV_PASSWORD: ${DAV_PASSWORD:?set via Coolify env}
+      DAV_PASSWORD_TAKASHIAIHARA: ${DAV_PASSWORD_TAKASHIAIHARA:?set via Coolify env}
+      DAV_PASSWORD_DATEMEGANE: ${DAV_PASSWORD_DATEMEGANE:?set via Coolify env}
+      DAV_PASSWORD_MAMETA: ${DAV_PASSWORD_MAMETA:?set via Coolify env}
+      DAV_PASSWORD_JOHN: ${DAV_PASSWORD_JOHN:?set via Coolify env}
     volumes:
       - dav-data:/data
     configs:
@@ -25,7 +29,9 @@ configs:
     content: |
           address: 0.0.0.0
           port: 6065
-          directory: /data
+          # ユーザーの directory を書き忘れたときに全員のフォルダが見えないよう、既定は存在しないパスにする。
+          # 親も無いので MKCOL / PUT は 409 で、クライアントからも作れない
+          directory: /nonexistent/no-user-directory
           behindProxy: true
           permissions: CRUD
           log:
@@ -37,8 +43,18 @@ configs:
             allowed_hosts:
               - chrome-extension://fonflmjnjbkigocpoommgmhljdpljain
           users:
-            - username: "{env}DAV_USERNAME"
-              password: "{env}DAV_PASSWORD"
+            - username: takashiaihara
+              password: "{env}DAV_PASSWORD_TAKASHIAIHARA"
+              directory: /data/takashiaihara
+            - username: datemegane
+              password: "{env}DAV_PASSWORD_DATEMEGANE"
+              directory: /data/datemegane
+            - username: mameta
+              password: "{env}DAV_PASSWORD_MAMETA"
+              directory: /data/mameta
+            - username: john
+              password: "{env}DAV_PASSWORD_JOHN"
+              directory: /data/john
 
 volumes:
   dav-data:
