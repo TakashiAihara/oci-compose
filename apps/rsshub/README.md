@@ -30,7 +30,8 @@ Deploy is needed only when routes, the Dockerfile or the compose file change, no
 | Route | Source | Notes |
 |---|---|---|
 | `/render/xpath/:url/:routeParams` | Any page, rendered in Lightpanda | Rules are XPath; keys and defaults are in the route's description. Needs `ALLOW_USER_SUPPLY_UNSAFE_DOMAIN` (set in the compose file). Requests to private and internal addresses are blocked |
-| `/hitomi/tag/:tag/:language?` | The tag list of `hitomi.la` (`/tag/<tag>-<language>.html`), read from the `.nozomi` id list the page itself loads | The 25 newest galleries. `tag` keeps its `female:` / `male:` prefix as in the site URL; `language` defaults to `all`. No thumbnails: the thumbnail host answers 404 without a hitomi.la Referer. A tag the site does not have fails the feed with a 404 |
+| `/hitomi/tag/:tag/:language?` | The tag list of `hitomi.la` (`/tag/<tag>-<language>.html`), read from the `.nozomi` id list the page itself loads | The 25 newest galleries. `tag` keeps its `female:` / `male:` prefix as in the site URL; `language` defaults to `all`. Each item carries the first page's thumbnail through `/hitomi/thumb/:hash`, at the public host, since the browser opening FreshRSS loads it. A tag the site does not have fails the feed with a 404 |
+| `/hitomi/thumb/:hash` | A gallery page's big thumbnail on `tn.gold-usergeneratedcontent.net` | Adds the `Referer: https://hitomi.la/` the host demands (404 without it). Takes only a 64-hex hash, so it proxies nothing else |
 | `/google-news-foryou` | The For you tab of `news.google.com`, signed in with `GOOGLE_COOKIE` | No browser: reads the page's own data and asks for more pages the way its scrolling does, up to the tab's end (about 200 articles). A signed-out cookie fails the feed with `signed out: refresh GOOGLE_COOKIE`; copy the `cookie:` request header of a signed-in `news.google.com/foryou` into Infisical home/prod `GOOGLE_COOKIE` and the Coolify env, then restart |
 
 ## Feeds built on `/render/xpath`
