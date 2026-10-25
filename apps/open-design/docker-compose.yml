@@ -1,7 +1,8 @@
 # OpenDesign (opendesign.takashiaihara.site)。daemon は Pocket ID (apps/pocket-id) のログインを
 # 前に置く oauth2-proxy の後ろにだけ置き、Traefik の domain は open-design-auth にだけ付ける。
 # daemon は claude を --permission-mode bypassPermissions で起動するので、Coolify の
-# connect_to_docker_network は false にして、共有の coolify network の他のアプリから切り離す。
+# connect_to_docker_network は false にして、他のアプリのコンテナへの直接の到達を切る
+# (coolify-proxy はこの app の network にも入るので、Traefik 経由の公開ルートには届く)。
 # 作業機の Claude Code から MCP で使うときは、oi1 に ssh して
 # `docker exec -i <container> node /app/apps/daemon/bin/od.mjs mcp` を動かす。PATH の `od` は busybox の
 # octal dump で別物。daemon は loopback からの要求に token を求めないので、oauth2-proxy を通さずに済む。

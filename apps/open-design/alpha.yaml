@@ -6,9 +6,8 @@ upstreamConfig:
     - id: open-design
       path: /
       uri: http://open-design:7456
-      # 既定の 30 秒では export のような長い同期の処理が 502 になり、1 秒の flush では SSE がまとめて届く
+      # 既定の 30 秒では、応答ヘッダを返すまでが長い同期の処理 (export 等) が 502 になる
       timeout: 10m
-      flushInterval: 100ms
 providers:
   - id: pocket-id
     provider: oidc
