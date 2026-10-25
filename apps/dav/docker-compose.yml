@@ -2,7 +2,7 @@
 # 拡張の「サイトへのアクセス」を「クリック時」のまま使うため、拡張の origin からの CORS だけを許可する。
 # Google アカウント (Chrome のプロファイル) ごとにユーザーとフォルダを分け、他のアカウントのタブを読めないようにする。
 # パスワードは Infisical の NICETAB_WEBDAV_PASSWORD_<名前> (home/prod)、mameta だけ mameta/prod の NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
-# 上流はユーザーのフォルダを作らないので、ユーザーを足すときは volume に先に mkdir する。
+# 上流はユーザーのフォルダを作らない (無いと PROPFIND 404 / PUT 409 で NiceTab の同期が失敗する) ので、ユーザーを足すときは volume に先に mkdir する。
 services:
   dav:
     image: ghcr.io/hacdias/webdav:v5.17.1
@@ -29,7 +29,8 @@ configs:
     content: |
           address: 0.0.0.0
           port: 6065
-          directory: /data
+          # ユーザーの directory を書き忘れたときに全員のフォルダが見えないよう、既定は存在しないパスにする
+          directory: /data/.no-user-directory
           behindProxy: true
           permissions: CRUD
           log:
