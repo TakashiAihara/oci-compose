@@ -11,6 +11,23 @@ const TIMEOUT_MS = 10000;
 
 type Seen = { url: string; title: string; image: string | null; first_seen: string };
 
+/** Only Google's resized thumbnails go into <img>, so a pushed file cannot put arbitrary markup in the description. */
+const THUMBNAIL = /^https:\/\/encrypted-tbn\d\.gstatic\.com\/images\?q=tbn:[\w-]+(?:&s=\d+)?$/;
+
+export const isSeen = (x: unknown): x is Seen => {
+    const s = x as Seen;
+    return (
+        typeof s === 'object' &&
+        s !== null &&
+        typeof s.title === 'string' &&
+        s.title !== '' &&
+        typeof s.url === 'string' &&
+        /^https?:\/\//.test(s.url) &&
+        !Number.isNaN(Date.parse(s.first_seen)) &&
+        (s.image === null || (typeof s.image === 'string' && THUMBNAIL.test(s.image)))
+    );
+};
+
 export const toItem = (s: Seen): DataItem => ({
     title: s.title,
     link: s.url,
@@ -24,7 +41,7 @@ export const toItem = (s: Seen): DataItem => ({
 });
 
 export const handler = async (): Promise<Data> => {
-    const password = process.env.GOOGLE_DISCOVER_DAV_READER_PASSWORD;
+    const password = process.env.GOOGLE_DISCOVER_DAV_READER_PASSWORD?.trim();
     if (!password) {
         throw new Error('google-discover: GOOGLE_DISCOVER_DAV_READER_PASSWORD is not set');
     }
@@ -47,14 +64,21 @@ export const handler = async (): Promise<Data> => {
         throw new Error(`google-discover: seen.json was last pushed ${Math.round(age / 60000)} minutes ago; the collector stopped`);
     }
 
-    const seen: unknown = await res.json();
-    if (!Array.isArray(seen) || seen.length === 0) {
-        throw new Error('google-discover: seen.json has no article; the collector or its format broke');
+    let seen: unknown;
+    try {
+        seen = JSON.parse(await res.text());
+    } catch {
+        throw new Error('google-discover: seen.json is not JSON; a push was cut off or the collector broke');
+    }
+    // Drop malformed entries rather than the feed; an all-bad file is a broken collector and fails below.
+    const items = Array.isArray(seen) ? seen.filter((s) => isSeen(s)) : [];
+    if (items.length === 0) {
+        throw new Error('google-discover: seen.json has no valid article; the collector or its format broke');
     }
     return {
         title: 'Google Discover',
         link: 'https://discover.google.com/',
-        item: (seen as Seen[]).slice(0, LIMIT).map(toItem),
+        item: items.slice(0, LIMIT).map(toItem),
     };
 };
 
