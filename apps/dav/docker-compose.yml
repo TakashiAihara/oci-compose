@@ -18,6 +18,9 @@ services:
       # Infisical home/prod の GOOGLE_DISCOVER_DAV_PASSWORD / GOOGLE_DISCOVER_DAV_READER_PASSWORD と同じ値
       DAV_PASSWORD_GOOGLE_DISCOVER: ${DAV_PASSWORD_GOOGLE_DISCOVER:?set via Coolify env}
       DAV_PASSWORD_GOOGLE_DISCOVER_READER: ${DAV_PASSWORD_GOOGLE_DISCOVER_READER:?set via Coolify env}
+      # Infisical home/prod の GOOGLE_NEWS_DAV_PASSWORD / GOOGLE_NEWS_DAV_READER_PASSWORD と同じ値
+      DAV_PASSWORD_GOOGLE_NEWS: ${DAV_PASSWORD_GOOGLE_NEWS:?set via Coolify env}
+      DAV_PASSWORD_GOOGLE_NEWS_READER: ${DAV_PASSWORD_GOOGLE_NEWS_READER:?set via Coolify env}
     volumes:
       - dav-data:/data
     configs:
@@ -67,6 +70,16 @@ configs:
             - username: google-discover-reader
               password: "{env}DAV_PASSWORD_GOOGLE_DISCOVER_READER"
               directory: /data/google-discover
+              permissions: R
+            # Google ニュースのおすすめ (TakashiAihara/google-news-rss)。家の収集ホストが書き、RSSHub の /google-news-foryou が読む
+            - username: google-news
+              password: "{env}DAV_PASSWORD_GOOGLE_NEWS"
+              directory: /data/google-news
+              # news.json を上書きするだけで消さない
+              permissions: CRU
+            - username: google-news-reader
+              password: "{env}DAV_PASSWORD_GOOGLE_NEWS_READER"
+              directory: /data/google-news
               permissions: R
 
 volumes:
