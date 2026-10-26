@@ -15,6 +15,9 @@ services:
       DAV_PASSWORD_DATEMEGANE: ${DAV_PASSWORD_DATEMEGANE:?set via Coolify env}
       DAV_PASSWORD_MAMETA: ${DAV_PASSWORD_MAMETA:?set via Coolify env}
       DAV_PASSWORD_JOHN: ${DAV_PASSWORD_JOHN:?set via Coolify env}
+      # Infisical home/prod の GOOGLE_DISCOVER_DAV_PASSWORD / GOOGLE_DISCOVER_DAV_READER_PASSWORD と同じ値
+      DAV_PASSWORD_GOOGLE_DISCOVER: ${DAV_PASSWORD_GOOGLE_DISCOVER:?set via Coolify env}
+      DAV_PASSWORD_GOOGLE_DISCOVER_READER: ${DAV_PASSWORD_GOOGLE_DISCOVER_READER:?set via Coolify env}
     volumes:
       - dav-data:/data
     configs:
@@ -55,6 +58,14 @@ configs:
             - username: john
               password: "{env}DAV_PASSWORD_JOHN"
               directory: /data/john
+            # NiceTab ではなく Google Discover の記事 (TakashiAihara/google-discover-rss)。家の収集ホストが書き、RSSHub の /google-discover が読む
+            - username: google-discover
+              password: "{env}DAV_PASSWORD_GOOGLE_DISCOVER"
+              directory: /data/google-discover
+            - username: google-discover-reader
+              password: "{env}DAV_PASSWORD_GOOGLE_DISCOVER_READER"
+              directory: /data/google-discover
+              permissions: R
 
 volumes:
   dav-data:

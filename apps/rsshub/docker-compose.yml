@@ -17,11 +17,10 @@ services:
       # Cookie of the main Google account (Infisical home/prod GOOGLE_COOKIE) for /google-news-foryou.
       # Plain ${VAR}: Coolify turns the message of ${VAR:?msg} into a default value. The route fails when it is empty.
       GOOGLE_COOKIE: ${GOOGLE_COOKIE}
+      # Password of the dav user google-discover-reader (Infisical home/prod GOOGLE_DISCOVER_DAV_READER_PASSWORD) for /google-discover.
+      GOOGLE_DISCOVER_DAV_READER_PASSWORD: ${GOOGLE_DISCOVER_DAV_READER_PASSWORD}
       # X cookie of the sub account (same value twr uses on hermes-claude) for /twitter/*.
       TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:?set via Coolify env}
-    volumes:
-      # /google-discover reads what google-discover-rss pushes here from the home emulator host over ssh (ubuntu owns the directory).
-      - /data/google-discover:/data/google-discover:ro
     depends_on:
       - rsshub-redis
     healthcheck:
