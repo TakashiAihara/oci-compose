@@ -7,6 +7,11 @@ const USER = 'google-discover-reader';
 const MAX_AGE_MS = 3 * 60 * 60 * 1000;
 /** The file keeps up to 2000; FreshRSS has the older ones already. */
 const LIMIT = 500;
+/**
+ * A fresh push can still carry nothing new (signed out with the old cards cached, a stuck feed). Runs 5 hours apart saw
+ * 0 new articles once (2026-10-26), so a day without any is not a quiet Discover but a stopped one.
+ */
+const MAX_NEWEST_AGE_MS = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = 10000;
 
 type Seen = { url: string; title: string; image: string | null; first_seen: string };
@@ -23,22 +28,25 @@ export const isSeen = (x: unknown): x is Seen => {
         s.title !== '' &&
         typeof s.url === 'string' &&
         /^https?:\/\//.test(s.url) &&
-        !Number.isNaN(Date.parse(s.first_seen)) &&
-        (s.image === null || (typeof s.image === 'string' && THUMBNAIL.test(s.image)))
+        !Number.isNaN(Date.parse(s.first_seen))
     );
 };
 
-export const toItem = (s: Seen): DataItem => ({
-    title: s.title,
-    link: s.url,
-    // Discover gives no publish time; the first time the collector saw the card is the closest stand-in.
-    pubDate: new Date(s.first_seen),
-    image: s.image ?? undefined,
-    description: s.image ? `<img src="${s.image}" referrerpolicy="no-referrer">` : undefined,
-    enclosure_url: s.image ?? undefined,
-    enclosure_type: s.image ? 'image/jpeg' : undefined,
-    enclosure_length: s.image ? 0 : undefined,
-});
+export const toItem = (s: Seen): DataItem => {
+    // An image of another shape loses only the image, so a thumbnail host change does not empty the feed.
+    const image = typeof s.image === 'string' && THUMBNAIL.test(s.image) ? s.image : undefined;
+    return {
+        title: s.title,
+        link: s.url,
+        // Discover gives no publish time; the first time the collector saw the card is the closest stand-in.
+        pubDate: new Date(s.first_seen),
+        image,
+        description: image ? `<img src="${image}" referrerpolicy="no-referrer">` : undefined,
+        enclosure_url: image,
+        enclosure_type: image ? 'image/jpeg' : undefined,
+        enclosure_length: image ? 0 : undefined,
+    };
+};
 
 export const handler = async (): Promise<Data> => {
     const password = process.env.GOOGLE_DISCOVER_DAV_READER_PASSWORD?.trim();
@@ -74,6 +82,10 @@ export const handler = async (): Promise<Data> => {
     const items = Array.isArray(seen) ? seen.filter((s) => isSeen(s)) : [];
     if (items.length === 0) {
         throw new Error('google-discover: seen.json has no valid article; the collector or its format broke');
+    }
+    const newest = Math.max(...items.map((s) => Date.parse(s.first_seen)));
+    if (Date.now() - newest > MAX_NEWEST_AGE_MS) {
+        throw new Error(`google-discover: no new article for ${Math.round((Date.now() - newest) / 3600000)} hours; Discover on the collector is stuck or signed out`);
     }
     return {
         title: 'Google Discover',
