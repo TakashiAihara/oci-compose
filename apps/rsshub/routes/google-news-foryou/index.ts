@@ -5,7 +5,7 @@ const FILE = 'http://dav:6065/news.json';
 const USER = 'google-news-reader';
 /** A few missed runs are tolerated; older than this means the collector stopped, and a feed that stops changing looks like a quiet tab. */
 const MAX_AGE_MS = 60 * 60 * 1000;
-/** A fresh push can still carry a stale tab (cached signed-out data); For you always has something from the last day. */
+/** A fresh push can still carry a stuck tab that stopped changing; For you always has something from the last day. */
 const MAX_NEWEST_AGE_MS = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = 10000;
 const PAGE = 'https://news.google.com/foryou?hl=ja&gl=JP&ceid=JP:ja';
@@ -75,9 +75,14 @@ export const handler = async (): Promise<Data> => {
     if (items.length === 0) {
         throw new Error('google-news-foryou: news.json has no valid article; the collector or its format broke');
     }
-    const newest = Math.max(0, ...items.map((n) => published(n)?.getTime() ?? 0));
+    const dates = items.map((n) => published(n)?.getTime()).filter((t): t is number => t !== undefined);
+    // No date at all means the collector reads the wrong field, which is not the same failure as an old tab.
+    if (dates.length === 0) {
+        throw new Error('google-news-foryou: no article carries a publish time; the collector no longer finds the date field');
+    }
+    const newest = Math.max(...dates);
     if (Date.now() - newest > MAX_NEWEST_AGE_MS) {
-        throw new Error('google-news-foryou: no article from the last 24 hours; the collector is pushing a stale or signed-out tab');
+        throw new Error('google-news-foryou: no article from the last 24 hours; the tab the collector reads has stopped changing');
     }
     return {
         title: 'Google ニュース おすすめ',
