@@ -1,172 +1,93 @@
 import type { Data, DataItem, Route } from '@/types';
-import logger from '@/utils/logger';
 
-const ORIGIN = 'https://news.google.com';
-const PAGE = `${ORIGIN}/foryou?hl=ja&gl=JP&ceid=JP:ja`;
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
-/** The tab stops handing out continuation tokens at 200 articles (8 pages after the first, 2026-10-25), so this only bounds a token that never ends. */
-const MAX_PAGES = 12;
-/** Per request; upstream's global fetch has no timeout, and a stalled Google answer would hold the route forever. */
-const TIMEOUT_MS = 20000;
-/** For the whole read, under the 60s cache claim, so a slow Google does not start a second read on top of this one. */
-const DEADLINE_MS = 50000;
+/** google-news-rss on a home host PUTs this every 10 minutes as the dav user google-news; this route reads it as google-news-reader. */
+const FILE = 'http://dav:6065/news.json';
+const USER = 'google-news-reader';
+/** A few missed runs are tolerated; older than this means the collector stopped, and a feed that stops changing looks like a quiet tab. */
+const MAX_AGE_MS = 60 * 60 * 1000;
+/** A fresh push can still carry a stuck tab that stopped changing; For you always has something from the last day. */
+const MAX_NEWEST_AGE_MS = 24 * 60 * 60 * 1000;
+const TIMEOUT_MS = 10000;
+const PAGE = 'https://news.google.com/foryou?hl=ja&gl=JP&ceid=JP:ja';
 
-type Article = unknown[];
+type News = { url: string; title: string; publisher: string | null; published: number | null; image: string | null };
 
-/** An article is the array whose [1][1] is its CBMi id, [2] the title, [4][0] epoch seconds, [6] the source URL, [8][0][0] its image path and [10][2] the publisher. */
-const isArticle = (x: unknown[]): boolean =>
-    x.length > 10 &&
-    Array.isArray(x[1]) &&
-    typeof x[1][1] === 'string' &&
-    x[1][1].startsWith('CBMi') &&
-    typeof x[2] === 'string' &&
-    typeof x[6] === 'string' &&
-    x[6].startsWith('http');
+/** Only Google's resized thumbnails go into <img>, so a pushed file cannot put arbitrary markup in the description. */
+const THUMBNAIL = /^https:\/\/encrypted-tbn\d\.gstatic\.com\/images\?q=tbn:[\w-]+(?:&[\w=-]+)*$/;
 
-export const collect = (x: unknown, out: Map<string, Article>): void => {
-    if (!Array.isArray(x)) {
-        return;
-    }
-    if (isArticle(x)) {
-        const id = (x[1] as string[])[1];
-        if (!out.has(id)) {
-            out.set(id, x);
-        }
-    }
-    for (const y of x) {
-        collect(y, out);
-    }
+export const isNews = (x: unknown): x is News => {
+    const n = x as News;
+    return typeof n === 'object' && n !== null && typeof n.title === 'string' && n.title !== '' && typeof n.url === 'string' && /^https?:\/\//.test(n.url);
 };
 
-export const toItem = (a: Article): DataItem => {
-    const ts = Array.isArray(a[4]) && typeof a[4][0] === 'number' ? new Date(a[4][0] * 1000) : undefined;
-    const publisher = Array.isArray(a[10]) && typeof a[10][2] === 'string' ? a[10][2] : undefined;
-    // Google's resized copy, not the publisher's original: all 45 of 50 articles with an image have it (39 have the original) and it opens without the cookie.
-    // The id goes into an HTML attribute, so only its base64url alphabet is let through.
-    const path = Array.isArray(a[8]) && Array.isArray(a[8][0]) && typeof a[8][0][0] === 'string' && /^\/attachments\/[\w-]+$/.test(a[8][0][0]) ? a[8][0][0] : undefined;
-    const image = path ? `${ORIGIN}/api${path}=-w640-h360-p-df` : undefined;
+const published = (n: News): Date | undefined =>
+    typeof n.published === 'number' && Number.isFinite(n.published) && n.published > 0 && n.published < 1e11 ? new Date(n.published * 1000) : undefined;
+
+export const toItem = (n: News): DataItem => {
+    // An image of another shape loses only the image, so a thumbnail host change does not empty the feed.
+    const image = typeof n.image === 'string' && THUMBNAIL.test(n.image) ? n.image : undefined;
     return {
-        title: a[2] as string,
-        link: a[6] as string,
-        author: publisher,
-        pubDate: ts,
+        title: n.title,
+        link: n.url,
+        author: typeof n.publisher === 'string' ? n.publisher : undefined,
+        // An out-of-range number would make an Invalid Date, which throws when the Atom output calls toISOString.
+        pubDate: published(n),
         image,
         description: image ? `<img src="${image}" referrerpolicy="no-referrer">` : undefined,
         enclosure_url: image,
-        // -df answers JPEG even for a PNG original (2026-10-25); RSS 2.0 requires a length, and 0 is upstream's own fill.
         enclosure_type: image ? 'image/jpeg' : undefined,
         enclosure_length: image ? 0 : undefined,
     };
 };
 
-const pick = (html: string, re: RegExp, what: string): string => {
-    const m = html.match(re);
-    if (!m) {
-        throw new Error(`google-news-foryou: ${what} not found in the page; signed out (refresh GOOGLE_COOKIE) or the page layout changed`);
-    }
-    return m[1];
-};
-
-/** SyntaxError quotes the input, which here is signed-in page data; the message names the part instead. */
-const parse = <T>(text: string, what: string): T => {
-    try {
-        return JSON.parse(text) as T;
-    } catch {
-        throw new Error(`google-news-foryou: ${what} is not JSON; the data layout changed`);
-    }
-};
-
-/** fetch errors quote an invalid header value whole, which would put the cookie in the log and the error page; this keeps only the kind. */
-const get = async (url: string, init: RequestInit, what: string, deadline: AbortSignal): Promise<Response> => {
-    try {
-        return await fetch(url, { ...init, redirect: 'manual', signal: AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), deadline]) });
-    } catch (error) {
-        // The cause's code (ECONNRESET, ENOTFOUND) carries no header value, so it is kept to tell network failures apart.
-        const code = error instanceof Error && error.cause && typeof (error.cause as { code?: unknown }).code === 'string' ? ` ${(error.cause as { code: string }).code}` : '';
-        throw new Error(`google-news-foryou: ${what} failed (${error instanceof Error ? error.name : 'error'}${code})`);
-    }
-};
-
 export const handler = async (): Promise<Data> => {
-    // Trimmed: a value pasted with a trailing newline is an invalid header and the error would echo the whole cookie.
-    // A pasted `cookie:` header name would turn the first cookie into `cookie: SID` and sign the request out.
-    const cookie = (process.env.GOOGLE_COOKIE ?? '').trim().replace(/^cookie:\s*/i, '');
-    if (!cookie) {
-        throw new Error('google-news-foryou: GOOGLE_COOKIE is not set');
+    const secret = process.env.GOOGLE_NEWS_DAV_READER_PASSWORD;
+    if (!secret) {
+        throw new Error('google-news-foryou: GOOGLE_NEWS_DAV_READER_PASSWORD is not set');
     }
-    if (!/^[\x20-\x7e]+$/.test(cookie)) {
-        throw new Error('google-news-foryou: GOOGLE_COOKIE has a line break or a non-ASCII character; paste the value again on one line');
+    const res = await fetch(FILE, {
+        headers: { authorization: `Basic ${Buffer.from(`${USER}:${secret}`).toString('base64')}` },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (res.status === 404) {
+        throw new Error('google-news-foryou: news.json is not on dav; the collector has never pushed');
     }
-    const headers = { cookie, 'user-agent': UA, 'accept-language': 'ja' };
-
-    // manual: a dead cookie answers with a redirect to the sign-in page, which must fail the feed rather than read as an empty tab.
-    const deadline = AbortSignal.timeout(DEADLINE_MS);
-    const res = await get(PAGE, { headers }, 'the For you page', deadline);
-    if (res.status !== 200) {
-        throw new Error(`google-news-foryou: ${PAGE} answered ${res.status} ${res.headers.get('location')?.startsWith('https://accounts.google.com') ? '(signed out: refresh GOOGLE_COOKIE)' : ''}`);
+    if (!res.ok) {
+        throw new Error(`google-news-foryou: dav answered ${res.status}`);
     }
-    const html = await res.text();
-
-    const at = pick(html, /"SNlM0e":"([^"]+)"/, 'XSRF token');
-    const fsid = pick(html, /"FdrFJe":"([^"]+)"/, 'session id');
-    const bl = pick(html, /"cfb2h":"([^"]+)"/, 'build label');
-    const template = parse<unknown[]>(pick(html, /'ds:0' : \{id:'JqDnie',request:(\[.*?\])\}/, 'request template'), 'request template');
-    const first = parse<unknown[][]>(pick(html, /AF_initDataCallback\(\{key: 'ds:0'.*?data:(.*?), sideChannel/s, 'initial data'), 'initial data');
-
-    const articles = new Map<string, Article>();
-    collect(first, articles);
-
-    // The page asks for more with the token of the last answer and an offset that grows by 10 from 11, as its own scrolling does.
-    // Without the first token the feed would quietly stop at the first page; that is a layout change, not a short tab.
-    let token = first[1]?.[1];
-    if (typeof token !== 'string') {
-        throw new Error('google-news-foryou: no continuation token in the initial data; the data layout changed');
+    const modified = Date.parse(res.headers.get('last-modified') ?? '');
+    if (Number.isNaN(modified)) {
+        throw new Error('google-news-foryou: dav sent no Last-Modified, so the age of news.json is unknown');
     }
-    let page = 0;
-    for (let offset = 11; page < MAX_PAGES && typeof token === 'string'; page++, offset += 10) {
-        // A later page failing keeps what was read: only that page is lost, and the log says so.
-        // The first one failing is not a short tab but a broken request (tokens, template, endpoint), so it fails the feed.
-        try {
-            const qs = new URLSearchParams({ rpcids: 'JqDnie', 'source-path': '/foryou', 'f.sid': fsid, bl, hl: 'ja', gl: 'JP', rt: 'c' });
-            const body = new URLSearchParams({ 'f.req': JSON.stringify([[['JqDnie', JSON.stringify([...template.slice(0, 2), token, offset]), null, 'generic']]]), at });
-            const more = await get(`${ORIGIN}/_/DotsSplashUi/data/batchexecute?${qs}`, { method: 'POST', headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body }, `page ${page + 1}`, deadline);
-            if (more.status !== 200) {
-                throw new Error(`google-news-foryou: page ${page + 1} answered ${more.status}`);
-            }
-            const line = (await more.text()).split('\n').find((l) => l.startsWith('[["wrb.fr"'));
-            const wrapped = line ? parse<unknown[][]>(line, `page ${page + 1}`)[0]?.[2] : undefined;
-            if (typeof wrapped !== 'string') {
-                throw new Error(`google-news-foryou: page ${page + 1} had no JqDnie answer`);
-            }
-            const answer = parse<unknown[][]>(wrapped, `page ${page + 1}`);
-            collect(answer, articles);
-            token = answer[1]?.[1];
-        } catch (error) {
-            if (page === 0) {
-                throw error;
-            }
-            logger.warn(`${error instanceof Error ? error.message : error}; serving the ${articles.size} articles read so far`);
-            break;
-        }
-    }
-    if (page === MAX_PAGES && typeof token === 'string') {
-        logger.warn(`google-news-foryou: stopped at MAX_PAGES (${MAX_PAGES}) with a token left`);
+    const age = Date.now() - modified;
+    if (age > MAX_AGE_MS) {
+        throw new Error(`google-news-foryou: news.json was last pushed ${Math.round(age / 60000)} minutes ago; the collector stopped or is signed out`);
     }
 
-    // An empty tab means the data moved, not that there is no news; publishing it would look like a working feed.
-    if (articles.size === 0) {
-        throw new Error('google-news-foryou: no article found; the data layout changed');
+    let news: unknown;
+    try {
+        news = JSON.parse(await res.text());
+    } catch {
+        throw new Error('google-news-foryou: news.json is not JSON; a push was cut off or the collector broke');
     }
-    // Readers key items on the link; one story under two ids would show twice. The first keeps its place and its own title.
-    const items = [...articles.values()].filter((a, i, all) => all.findIndex((b) => b[6] === a[6]) === i).map(toItem);
-    // Images vanishing all at once means [8][0][0] moved; the feed still reads, so only the log says so.
-    if (!items.some((i) => i.image)) {
-        logger.warn('google-news-foryou: no item has an image; the image path moved');
+    // Drop malformed entries rather than the feed; an all-bad file is a broken collector and fails below.
+    const items = Array.isArray(news) ? news.filter((n) => isNews(n)) : [];
+    if (items.length === 0) {
+        throw new Error('google-news-foryou: news.json has no valid article; the collector or its format broke');
+    }
+    const dates = items.map((n) => published(n)?.getTime()).filter((t): t is number => t !== undefined);
+    // No date at all means the collector reads the wrong field, which is not the same failure as an old tab.
+    if (dates.length === 0) {
+        throw new Error('google-news-foryou: no article carries a publish time; the collector no longer finds the date field');
+    }
+    const newest = Math.max(...dates);
+    if (Date.now() - newest > MAX_NEWEST_AGE_MS) {
+        throw new Error('google-news-foryou: no article from the last 24 hours; the tab the collector reads has stopped changing');
     }
     return {
         title: 'Google ニュース おすすめ',
         link: PAGE,
-        item: items,
+        item: items.map(toItem),
     };
 };
 
@@ -178,6 +99,6 @@ export const route: Route = {
     example: '/google-news-foryou',
     categories: ['new-media'],
     features: {
-        requireConfig: [{ name: 'GOOGLE_COOKIE', description: 'Cookie header of a signed-in news.google.com request' }],
+        requireConfig: [{ name: 'GOOGLE_NEWS_DAV_READER_PASSWORD', description: 'Password of the dav user google-news-reader' }],
     },
 };

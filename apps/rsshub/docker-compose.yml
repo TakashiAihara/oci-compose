@@ -14,9 +14,8 @@ services:
       # Node sizes the heap to about half the 2g limit (1120MiB measured). A single heavy
       # route (/transformer-circuits) ran it out and took every route down until restart.
       NODE_OPTIONS: --max-old-space-size=1536
-      # Cookie of the main Google account (Infisical home/prod GOOGLE_COOKIE) for /google-news-foryou.
-      # Plain ${VAR}: Coolify turns the message of ${VAR:?msg} into a default value. The route fails when it is empty.
-      GOOGLE_COOKIE: ${GOOGLE_COOKIE}
+      # Password of the dav user google-news-reader (Infisical home/prod GOOGLE_NEWS_DAV_READER_PASSWORD) for /google-news-foryou.
+      GOOGLE_NEWS_DAV_READER_PASSWORD: ${GOOGLE_NEWS_DAV_READER_PASSWORD}
       # Password of the dav user google-discover-reader (Infisical home/prod GOOGLE_DISCOVER_DAV_READER_PASSWORD) for /google-discover.
       GOOGLE_DISCOVER_DAV_READER_PASSWORD: ${GOOGLE_DISCOVER_DAV_READER_PASSWORD}
       # X cookie of the sub account (same value twr uses on hermes-claude) for /twitter/*.
