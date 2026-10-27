@@ -19,6 +19,14 @@ services:
       FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
       # 移行元に許すホスト。GitHub は API と release assets の配信元も含める
       FORGEJO__migrations__ALLOWED_DOMAINS: "github.com,*.github.com,*.githubusercontent.com"
+      # メールは同じ coolify network の postfix (apps/smtp) 経由で Resend へ中継する。
+      # 内部通信なので認証なし。postfix は自己署名 cert を出すので検証しない
+      FORGEJO__mailer__ENABLED: "true"
+      FORGEJO__mailer__PROTOCOL: smtp
+      FORGEJO__mailer__SMTP_ADDR: smtp
+      FORGEJO__mailer__SMTP_PORT: "587"
+      FORGEJO__mailer__FORCE_TRUST_SERVER_CERT: "true"
+      FORGEJO__mailer__FROM: "Forgejo <noreply@takashiaihara.site>"
     volumes:
       - forgejo-data:/data
     labels:
