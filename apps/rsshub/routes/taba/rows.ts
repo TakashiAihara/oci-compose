@@ -114,21 +114,26 @@ export const handler = async (ctx: Context): Promise<Data> => {
             throw new Error(`taba: ${source} has no column ${column}`);
         }
     }
-    // Rows come newest run first; a second run on the same day repeats the guids, and only the newest copy is kept so an older run cannot overwrite it in the reader.
+    // Only the newest run: a second run on the same day replaces the first, whose rows would otherwise stay in the feed (thumbnails taken before a settings change, for one).
+    const newest = body.rows.filter((row) => (parseTime(text(row, '_fetched_at'))?.getTime() ?? 0) >= ranAt);
+    if (newest.length === 0) {
+        throw new Error(`taba: none of the ${body.rows.length} rows of ${source} on ${body.dt} carries a _fetched_at at or after the newest run ${body.until}`);
+    }
+    // One run can repeat a guid (the same image under two queries), and FreshRSS permanently degrades how it tells a feed's items apart when one fetch does.
     const items = new Map<string, DataItem>();
-    for (const row of body.rows) {
+    for (const row of newest) {
         const item = toItem(row, columns);
         if (item && !items.has(item.guid as string)) {
             items.set(item.guid as string, item);
         }
     }
     if (items.size === 0) {
-        throw new Error(`taba: none of the ${body.rows.length} rows of ${source} on ${body.dt} has a title and an http(s) link`);
+        throw new Error(`taba: none of the ${newest.length} rows of ${source}'s run ${body.until} has a title and an http(s) link`);
     }
     return {
         title: params.get('title') ?? `taba ${source}`,
         link: 'https://taba.takashiaihara.site/',
-        description: `taba ${source}, rows of ${body.dt} (UTC)`,
+        description: `taba ${source}, run ${body.until}`,
         item: [...items.values()],
     };
 };
@@ -145,7 +150,7 @@ export const route: Route = {
             'A query string naming columns: itemTitle and itemLink (required), itemImage, itemGuid, itemAuthor, itemDesc, itemPubDate (default _fetched_at, read as UTC), and title (the feed title itself)',
     },
     description:
-        "The newest day (UTC) of the collector's rows, newest run first, up to 1000 (taba web's page). Only collectors listed in the route are served. A column the collector does not have, or a newest run older than the collector's limit, fails the feed",
+        "The rows of the collector's newest run (by `_fetched_at`), one item per guid, read from the first 1000 of its newest day (UTC). Only collectors listed in the route are served. A column the collector does not have, or a newest run older than the collector's limit, fails the feed",
     categories: ['other'],
     features: {
         requireConfig: [{ name: 'TABA_WEB_KEY', description: 'The key taba web on taba1 checks in x-taba-web-key (Infisical home/prod TABA_WEB_KEY)' }],
