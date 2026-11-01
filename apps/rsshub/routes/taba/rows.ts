@@ -4,8 +4,17 @@ import type { Data, DataItem, Route } from '@/types';
 
 /** taba web on taba1, reached over the site-to-site link; it serves only oi1's address carrying x-taba-web-key. */
 const WEB = 'http://192.168.0.182:8790';
-const TIMEOUT_MS = 30000;
-const SOURCE = /^[\w-]+$/;
+/** Under FreshRSS's 30s feed timeout; taba web logs a cold /api/rows over R2 at 12s. */
+const TIMEOUT_MS = 20000;
+const HOUR_MS = 60 * 60 * 1000;
+/**
+ * The collectors this route serves, each with how old its newest run may be before the feed fails (the collector
+ * stopped). RSSHub has no login in front, so a collector not listed here stays behind taba web's own login.
+ */
+const SOURCES: Record<string, number> = {
+    // Runs daily; two days lets one run fail before the feed does.
+    'google-images': 48 * HOUR_MS,
+};
 
 type Row = Record<string, unknown>;
 export type Columns = { title: string; link: string; image?: string; guid?: string; author?: string; desc?: string; pubDate: string };
@@ -34,14 +43,14 @@ export const toItem = (row: Row, c: Columns): DataItem | undefined => {
         return undefined;
     }
     const raw = text(row, c.image);
-    // Only http(s) goes into <img>, so a row cannot put another scheme in the description.
-    const image = raw !== undefined && /^https?:\/\//.test(raw) ? raw : undefined;
+    // https only: another scheme in <img> could carry markup, and an http image is blocked as mixed content on FreshRSS's https page.
+    const image = raw !== undefined && /^https:\/\//.test(raw) ? raw : undefined;
     const desc = text(row, c.desc);
     const body = (image ? `<img src="${escape(image)}" referrerpolicy="no-referrer">` : '') + (desc ? `<p>${escape(desc)}</p>` : '');
     return {
         title,
         link,
-        // Several rows can share a page (an image search lists many images of one page), so each keeps its own guid.
+        // Several rows can share a page (an image search lists many images of one page), so each keeps its own guid when itemGuid names one.
         guid: text(row, c.guid) ?? link,
         author: text(row, c.author),
         pubDate: parseTime(text(row, c.pubDate)),
@@ -55,8 +64,9 @@ export const toItem = (row: Row, c: Columns): DataItem | undefined => {
 
 export const handler = async (ctx: Context): Promise<Data> => {
     const source = ctx.req.param('source') ?? '';
-    if (!SOURCE.test(source)) {
-        throw new Error('taba: source must be a collector name');
+    const maxAge = Object.hasOwn(SOURCES, source) ? SOURCES[source] : undefined;
+    if (maxAge === undefined) {
+        throw new Error(`taba: ${source} is not a collector this route serves`);
     }
     const params = new URLSearchParams(ctx.req.param('routeParams') ?? '');
     const title = params.get('itemTitle');
@@ -85,9 +95,18 @@ export const handler = async (ctx: Context): Promise<Data> => {
     if (!res.ok) {
         throw new Error(`taba: taba web answered ${res.status} for ${source}`);
     }
-    const body = (await res.json()) as { dt: string | null; columns: string[]; rows: Row[] };
-    if (body.dt === null) {
+    const body = (await res.json()) as { dt: string | null; until: string | null; columns: string[]; rows: Row[] };
+    if (body.dt === null || body.columns.length === 0) {
         throw new Error(`taba: ${source} has no data yet`);
+    }
+    // until is the newest run id (20261101T000509Z); a stopped collector would otherwise serve its last day forever.
+    const run = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(body.until ?? '');
+    if (!run) {
+        throw new Error(`taba: taba web gave no run id for ${source}`);
+    }
+    const ranAt = Date.UTC(+run[1], +run[2] - 1, +run[3], +run[4], +run[5], +run[6]);
+    if (Date.now() - ranAt > maxAge) {
+        throw new Error(`taba: the newest run of ${source} is ${Math.round((Date.now() - ranAt) / HOUR_MS)} hours old; the collector stopped`);
     }
     // A column name the collector does not have would empty every item silently; name it instead.
     for (const column of Object.values(columns)) {
@@ -114,11 +133,12 @@ export const route: Route = {
     handler,
     example: '/taba/rows/google-images/itemTitle=title&itemLink=page_url&itemImage=thumbnail_url&itemGuid=doc_id&itemAuthor=source&itemDesc=query',
     parameters: {
-        source: 'The collector name, as in taba web',
+        source: 'The collector name, as in taba web; only those listed in SOURCES',
         routeParams:
             'A query string naming columns: itemTitle and itemLink (required), itemImage, itemGuid, itemAuthor, itemDesc, itemPubDate (default _fetched_at, read as UTC), and title (the feed title itself)',
     },
-    description: "The newest day (UTC) of the collector's rows, newest run first, up to 1000 (taba web's page). A column the collector does not have fails the feed",
+    description:
+        "The newest day (UTC) of the collector's rows, newest run first, up to 1000 (taba web's page). Only collectors listed in the route are served. A column the collector does not have, or a newest run older than the collector's limit, fails the feed",
     categories: ['other'],
     features: {
         requireConfig: [{ name: 'TABA_WEB_KEY', description: 'The key taba web on taba1 checks in x-taba-web-key (Infisical home/prod TABA_WEB_KEY)' }],
