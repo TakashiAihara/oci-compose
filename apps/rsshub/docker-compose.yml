@@ -18,6 +18,8 @@ services:
       GOOGLE_NEWS_DAV_READER_PASSWORD: ${GOOGLE_NEWS_DAV_READER_PASSWORD}
       # Password of the dav user google-discover-reader (Infisical home/prod GOOGLE_DISCOVER_DAV_READER_PASSWORD) for /google-discover.
       GOOGLE_DISCOVER_DAV_READER_PASSWORD: ${GOOGLE_DISCOVER_DAV_READER_PASSWORD}
+      # The key taba web on taba1 checks (Infisical home/prod TABA_WEB_KEY, the same value apps/taba-web sends) for /taba/rows.
+      TABA_WEB_KEY: ${TABA_WEB_KEY}
       # X cookie of the sub account (same value twr uses on hermes-claude) for /twitter/*.
       TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:?set via Coolify env}
     depends_on:
