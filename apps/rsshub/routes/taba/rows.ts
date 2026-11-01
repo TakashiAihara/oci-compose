@@ -116,6 +116,9 @@ export const handler = async (ctx: Context): Promise<Data> => {
     }
     // Only the newest run: a second run on the same day replaces the first, whose rows would otherwise stay in the feed (thumbnails taken before a settings change, for one).
     const newest = body.rows.filter((row) => (parseTime(text(row, '_fetched_at'))?.getTime() ?? 0) >= ranAt);
+    if (newest.length === 0) {
+        throw new Error(`taba: none of the ${body.rows.length} rows of ${source} on ${body.dt} carries a _fetched_at at or after the newest run ${body.until}`);
+    }
     // One run can repeat a guid (the same image under two queries), and FreshRSS permanently degrades how it tells a feed's items apart when one fetch does.
     const items = new Map<string, DataItem>();
     for (const row of newest) {
@@ -125,12 +128,12 @@ export const handler = async (ctx: Context): Promise<Data> => {
         }
     }
     if (items.size === 0) {
-        throw new Error(`taba: none of the ${body.rows.length} rows of ${source} on ${body.dt} has a title and an http(s) link`);
+        throw new Error(`taba: none of the ${newest.length} rows of ${source}'s run ${body.until} has a title and an http(s) link`);
     }
     return {
         title: params.get('title') ?? `taba ${source}`,
         link: 'https://taba.takashiaihara.site/',
-        description: `taba ${source}, rows of ${body.dt} (UTC)`,
+        description: `taba ${source}, run ${body.until}`,
         item: [...items.values()],
     };
 };
