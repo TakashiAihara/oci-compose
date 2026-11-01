@@ -114,15 +114,22 @@ export const handler = async (ctx: Context): Promise<Data> => {
             throw new Error(`taba: ${source} has no column ${column}`);
         }
     }
-    const items = body.rows.map((row) => toItem(row, columns)).filter((i): i is DataItem => i !== undefined);
-    if (items.length === 0) {
+    // Rows come newest run first; a second run on the same day repeats the guids, and only the newest copy is kept so an older run cannot overwrite it in the reader.
+    const items = new Map<string, DataItem>();
+    for (const row of body.rows) {
+        const item = toItem(row, columns);
+        if (item && !items.has(item.guid as string)) {
+            items.set(item.guid as string, item);
+        }
+    }
+    if (items.size === 0) {
         throw new Error(`taba: none of the ${body.rows.length} rows of ${source} on ${body.dt} has a title and an http(s) link`);
     }
     return {
         title: params.get('title') ?? `taba ${source}`,
         link: 'https://taba.takashiaihara.site/',
         description: `taba ${source}, rows of ${body.dt} (UTC)`,
-        item: items,
+        item: [...items.values()],
     };
 };
 
