@@ -12,8 +12,8 @@ const HOUR_MS = 60 * 60 * 1000;
  * stopped). RSSHub has no login in front, so a collector not listed here stays behind taba web's own login.
  */
 const SOURCES: Record<string, number> = {
-    // Runs daily; two days lets one run fail before the feed does.
-    'google-images': 48 * HOUR_MS,
+    // Runs daily; 50 hours lets one run fail, with slack for the next run's own duration, before the feed does.
+    'google-images': 50 * HOUR_MS,
 };
 
 type Row = Record<string, unknown>;
