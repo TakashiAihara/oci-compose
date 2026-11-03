@@ -4,7 +4,7 @@
 # minFreeSpace leaves room for a manual vacuum (temporary copy of up to 5GB). Below it the node goes read-only.
 services:
   volume:
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs:4.50
     restart: unless-stopped
     network_mode: host
     command: 'volume -mserver=${SEAWEED_MASTER:?set in Coolify env} -ip=${NODE_IP:?set in Coolify env} -port=8081 -dir=/data -max=${MAX_VOLUMES:-7} -minFreeSpace=10GiB'
