@@ -3,6 +3,6 @@ import type { Namespace } from '@/types';
 export const namespace: Namespace = {
     name: 'taba',
     url: 'github.com/TakashiAihara/taba',
-    description: "A taba collector's newest day of rows, read from `taba web` on taba1 over the site-to-site link",
+    description: "A taba collector's newest run, read from the JSON file taba writes to R2",
     lang: 'ja',
 };
