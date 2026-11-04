@@ -5,6 +5,7 @@ import type { Context } from 'hono';
 import type { Data, DataItem, Route } from '@/types';
 
 const BUCKET = 'taba-feeds';
+/** Under FreshRSS's 30s feed timeout. */
 const TIMEOUT_MS = 20000;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -70,6 +71,9 @@ export const handler = async (ctx: Context): Promise<Data> => {
     const run = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(feed.run ?? '');
     if (!run) {
         throw new Error(`taba: the feed of ${source} has no run id`);
+    }
+    if (typeof feed.stale_after_hours !== 'number') {
+        throw new Error(`taba: the feed of ${source} has no age limit`);
     }
     const ranAt = Date.UTC(+run[1], +run[2] - 1, +run[3], +run[4], +run[5], +run[6]);
     if (Date.now() - ranAt > feed.stale_after_hours * HOUR_MS) {
