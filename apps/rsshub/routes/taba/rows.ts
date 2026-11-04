@@ -5,7 +5,7 @@ import type { Context } from 'hono';
 import type { Data, DataItem, Route } from '@/types';
 
 const BUCKET = 'taba-feeds';
-/** Under FreshRSS's 30s feed timeout. */
+/** Under FreshRSS's feed timeout. */
 const TIMEOUT_MS = 20000;
 const HOUR_MS = 60 * 60 * 1000;
 
