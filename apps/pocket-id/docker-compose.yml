@@ -1,5 +1,5 @@
 # SSO の発行元 (OIDC)。passkey だけでログインする。oi1 のアプリはここを OIDC の issuer にするか、
-# oauth2-proxy を前に置いてここへ飛ばす (apps/taba-web)。利用者・グループ・クライアントは
+# oauth2-proxy を前に置いてここへ飛ばす (taba の deploy/taba1-entry)。利用者・グループ・クライアントは
 # STATIC_API_KEY で API から作る (UI の初回 setup は使わない)。
 services:
   pocket-id:
