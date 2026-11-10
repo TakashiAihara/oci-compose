@@ -12,8 +12,12 @@ services:
       FORGEJO__database__DB_TYPE: sqlite3
       FORGEJO__server__DOMAIN: forgejo.takashiaihara.site
       FORGEJO__server__ROOT_URL: https://forgejo.takashiaihara.site/
-      # 22 番は oi1 の sshd が使っていて外に出していない。clone は HTTPS だけにする
-      FORGEJO__server__DISABLE_SSH: "true"
+      # ssh は内蔵サーバーを 2222 番で立て、port は publish しない。同じ Docker ネットワークの中からだけ届き、
+      # Coolify が private repo (miharashi) を deploy key で取得するのに使う。外からの clone は HTTPS だけ
+      # (22 番は oi1 の sshd が使っている)。画面に出る ssh の clone URL は外からは使えない
+      FORGEJO__server__DISABLE_SSH: "false"
+      FORGEJO__server__START_SSH_SERVER: "true"
+      FORGEJO__server__SSH_LISTEN_PORT: "2222"
       FORGEJO__security__INSTALL_LOCK: "true"
       FORGEJO__service__DISABLE_REGISTRATION: "true"
       FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
