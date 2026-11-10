@@ -5,6 +5,11 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    # Coolify は deploy の途中でホストの上からも repo を読む (compose の読み直し)。ホストの上では
+    # コンテナ名を引けないので、ssh を docker0 の IP (10.0.1.1、oi1 の daemon.json の bip) にだけ出し、
+    # ホストとコンテナの両方から ssh://git@10.0.1.1:2222/... で届くようにする。公開 IP には出さない
+    ports:
+      - "10.0.1.1:2222:2222"
     environment:
       TZ: Asia/Tokyo
       USER_UID: "1000"
@@ -12,7 +17,7 @@ services:
       FORGEJO__database__DB_TYPE: sqlite3
       FORGEJO__server__DOMAIN: forgejo.takashiaihara.site
       FORGEJO__server__ROOT_URL: https://forgejo.takashiaihara.site/
-      # ssh は内蔵サーバーを 2222 番で立て、port は publish しない。同じ Docker ネットワークの中からだけ届き、
+      # ssh は内蔵サーバーを 2222 番で立て、docker0 の IP にだけ出す (上の ports)。oi1 のホストとコンテナからだけ届き、
       # Coolify が private repo (miharashi) を deploy key で取得するのに使う。外からの clone は HTTPS だけ
       # (22 番は oi1 の sshd が使っている)。画面に出る ssh の clone URL は外からは使えない
       FORGEJO__server__DISABLE_SSH: "false"
