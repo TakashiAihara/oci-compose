@@ -6,7 +6,7 @@ services:
     expose:
       - "3000"
     # Coolify は deploy の途中でホストの上からも repo を読む (compose の読み直し)。ホストの上では
-    # コンテナ名を引けないので、ssh を docker0 の IP (10.0.1.1、oi1 の daemon.json の bip) にだけ出し、
+    # コンテナ名を引けないので、ssh を docker0 の IP (10.0.1.1、oi1 の daemon.json の default-address-pools から決まる) にだけ出し、
     # ホストとコンテナの両方から ssh://git@10.0.1.1:2222/... で届くようにする。公開 IP には出さない
     ports:
       - "10.0.1.1:2222:2222"
