@@ -8,11 +8,9 @@ OCI Always Free 上の単一 A1 インスタンス + Coolify で運用する個�
 
 ```
 apps/
-├── changedetection/docker-compose.yml
 ├── homepage/
 │   ├── docker-compose.yml
 │   └── config/             # services.yaml 等
-├── n8n/docker-compose.yml
 ├── ntfy/
 │   ├── docker-compose.yml
 │   └── config/             # server.yml
