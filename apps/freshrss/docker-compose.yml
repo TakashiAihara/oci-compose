@@ -11,7 +11,8 @@ services:
       TRUSTED_PROXY: 10.0.2.0/24
       # apps/rsshub over the coolify network (oi1 cannot hairpin to its public name);
       # FreshRSS blocks private hosts otherwise
-      INTERNAL_HOST_ALLOWLIST: rsshub:1200
+      # Space-separated. dav:6065 serves the mushirase feed (apps/dav, user mushirase-reader)
+      INTERNAL_HOST_ALLOWLIST: rsshub:1200 dav:6065
       # Both run only on the first start (empty data volume)
       FRESHRSS_INSTALL: >-
         --api-enabled
