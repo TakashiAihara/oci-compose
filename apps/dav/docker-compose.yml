@@ -1,4 +1,4 @@
-# NiceTab (タブ管理の Chrome 拡張) の同期先の WebDAV (dav.takashiaihara.site)。Google Discover の記事の受け渡し (google-discover / google-discover-reader) にも使う。
+# NiceTab (タブ管理の Chrome 拡張) の同期先の WebDAV (dav.takashiaihara.site)。Google Discover の記事の受け渡し (google-discover / google-discover-reader) と mushirase の Atom の受け渡しにも使う。
 # 拡張の「サイトへのアクセス」を「クリック時」のまま使うため、拡張の origin からの CORS だけを許可する。
 # Google アカウント (Chrome のプロファイル) ごとにユーザーとフォルダを分け、他のアカウントのタブを読めないようにする。
 # パスワードは Infisical の NICETAB_WEBDAV_PASSWORD_<名前> (home/prod)、mameta / john / jane / mike は自分の project (mameta/prod・john/prod・jane/prod・mike/prod) の NICETAB_WEBDAV_PASSWORD と同じ値を Coolify env に入れる。
@@ -23,6 +23,9 @@ services:
       # Infisical home/prod の GOOGLE_NEWS_DAV_PASSWORD / GOOGLE_NEWS_DAV_READER_PASSWORD と同じ値
       DAV_PASSWORD_GOOGLE_NEWS: ${DAV_PASSWORD_GOOGLE_NEWS:?set via Coolify env}
       DAV_PASSWORD_GOOGLE_NEWS_READER: ${DAV_PASSWORD_GOOGLE_NEWS_READER:?set via Coolify env}
+      # Infisical home/prod の MUSHIRASE_WEBDAV_PASSWORD / MUSHIRASE_WEBDAV_READER_PASSWORD と同じ値
+      DAV_PASSWORD_MUSHIRASE: ${DAV_PASSWORD_MUSHIRASE:?set via Coolify env}
+      DAV_PASSWORD_MUSHIRASE_READER: ${DAV_PASSWORD_MUSHIRASE_READER:?set via Coolify env}
     volumes:
       - dav-data:/data
     configs:
@@ -88,6 +91,16 @@ configs:
             - username: google-news-reader
               password: "{env}DAV_PASSWORD_GOOGLE_NEWS_READER"
               directory: /data/google-news
+              permissions: R
+            # 持ち物に当たったセキュリティ告知の Atom (TakashiAihara/mushirase)。家の cron1 が書き、FreshRSS が内部名 dav:6065 で読む
+            - username: mushirase
+              password: "{env}DAV_PASSWORD_MUSHIRASE"
+              directory: /data/mushirase
+              # feed.atom を作って上書きするだけで、読み返しも削除もしない
+              permissions: CU
+            - username: mushirase-reader
+              password: "{env}DAV_PASSWORD_MUSHIRASE_READER"
+              directory: /data/mushirase
               permissions: R
 
 volumes:
